@@ -54,16 +54,10 @@ call_recordings/
 dynamic_call_records/
 recordings/
 input_vad.wav
-*.wav
-*.mp3.tmp
 
 # Keep source audio assets only if you intentionally version them
 # Uncomment these if fan/honk audio files are private or large:
-# fan.mp3
-# honk.mp3
-# honk2.mp3
-# honk3.mp3
-# input.mp3
+
 
 # Local data / customer PII
 # Commit only sanitized sample data, not real leads.
