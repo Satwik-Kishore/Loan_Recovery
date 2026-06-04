@@ -1,0 +1,130 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.json.key
+service-account*.json
+credentials*.json
+secrets*.json
+
+# Gemini / Sarvam / API keys - never commit real keys
+api_keys.py
+local_settings.py
+
+# Logs
+logs/
+*.log
+*.jsonl
+
+# Runtime call artifacts
+notes/
+call_recordings/
+dynamic_call_records/
+recordings/
+input_vad.wav
+*.wav
+*.mp3.tmp
+
+# Keep source audio assets only if you intentionally version them
+# Uncomment these if fan/honk audio files are private or large:
+# fan.mp3
+# honk.mp3
+# honk2.mp3
+# honk3.mp3
+# input.mp3
+
+# Local data / customer PII
+# Commit only sanitized sample data, not real leads.
+data.json
+data.local.json
+customers*.json
+leads*.json
+*.sqlite
+*.sqlite3
+*.db
+
+# FastAPI / Uvicorn runtime
+.pid
+*.pid
+uvicorn*.log
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# Frontend dependencies / build output
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vite/
+.next/
+out/
+coverage/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+
+# Docker / local overrides
+.dockerignore.local
+docker-compose.override.yml
+
+# Generated patch bundles
+*.zip
+dynamic_llm_patch/

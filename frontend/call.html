@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Loan Recovery Web Voice Agent</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --line:#253044; --text:#e5e7eb; --muted:#94a3b8; --accent:#22c55e; --danger:#ef4444; --warn:#f59e0b; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Inter, system-ui, Segoe UI, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding:16px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+    h1 { font-size:18px; margin:0; }
+    main { display:grid; grid-template-columns: 360px 1fr; gap:16px; padding:16px; }
+    .card { background: var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow: 0 8px 28px rgba(0,0,0,.22); }
+    label { display:block; font-size:13px; color:var(--muted); margin:10px 0 6px; }
+    input, select, textarea { width:100%; background:#0b1020; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px; }
+    textarea { min-height:92px; resize:vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .sectionTitle { margin:14px 0 6px; color:#cbd5e1; font-size:13px; font-weight:800; }
+    button { border:0; border-radius:10px; padding:10px 12px; color:#07120a; background:var(--accent); font-weight:700; cursor:pointer; margin:6px 6px 6px 0; }
+    button.secondary { background:#38bdf8; color:#04121a; }
+    button.danger { background:var(--danger); color:white; }
+    button.warn { background:var(--warn); color:#1f1300; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .status { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+    .pill { border:1px solid var(--line); background:#0b1020; padding:6px 9px; border-radius:999px; font-size:12px; color:var(--muted); }
+    .pill.on { color:#bbf7d0; border-color:#22c55e; }
+    .pill.warn { color:#fde68a; border-color:#f59e0b; }
+    #log { height:210px; overflow:auto; background:#050914; border:1px solid var(--line); border-radius:10px; padding:10px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; white-space:pre-wrap; }
+    #transcript { height:68vh; overflow:auto; padding-right:6px; }
+    .msg { margin:10px 0; padding:12px 14px; border-radius:14px; max-width:780px; line-height:1.45; }
+    .customer { background:#1e293b; margin-left:auto; border-top-right-radius:4px; }
+    .bot { background:#064e3b; border-top-left-radius:4px; }
+    .system { background:#3f2b04; color:#fde68a; max-width:100%; }
+    .small { color:var(--muted); font-size:12px; margin-top:4px; }
+    .meter { height:8px; background:#0b1020; border:1px solid var(--line); border-radius:999px; overflow:hidden; margin-top:8px; }
+    .bar { height:100%; width:0%; background:var(--accent); transition: width .08s linear; }
+    @media(max-width:900px){ main{ grid-template-columns:1fr; } #transcript{height:55vh;} }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EMI Support Voice Assistant</h1>
+    <div class="pill" id="serverUrlPill"></div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2 style="font-size:16px;margin:0 0 10px;">Call Controls</h2>
+      <label>Backend URL</label>
+      <input id="backendUrl" value="http://localhost:8000" />
+
+      <label>Data source</label>
+      <select id="dataMode">
+        <option value="frontend" selected>Use lead data from this form</option>
+        <option value="json">Load existing customer from data.json</option>
+      </select>
+
+      <div id="jsonRefBox" style="display:none;">
+        <label>Customer ID / Loan ID / Row Index</label>
+        <input id="customerIndex" value="701" type="text" placeholder="e.g. 701 or 0" />
+      </div>
+
+      <div id="leadForm">
+        <div class="sectionTitle">Lead / Customer data</div>
+        <label>Customer name</label>
+        <input id="firstName" value="Rahul Patel" placeholder="Rahul Patel" />
+        <div class="grid2">
+          <div>
+            <label>Phone</label>
+            <input id="phoneNumber" value="9991110001" placeholder="9991110001" />
+          </div>
+          <div>
+            <label>Loan ID</label>
+            <input id="loanId" value="701" placeholder="701" />
+          </div>
+        </div>
+        <div class="grid2">
+          <div>
+            <label>Due amount</label>
+            <input id="dueAmount" type="number" value="2500" />
+          </div>
+          <div>
+            <label>Loan date</label>
+            <input id="loanDate" type="date" value="2026-05-11" />
+          </div>
+        </div>
+        <div class="grid2">
+          <div>
+            <label>PTP bucket used</label>
+            <input id="ptpBucket" type="number" value="0" min="0" />
+          </div>
+          <div>
+            <label>Max PTP extension days</label>
+            <input id="maxPtpExtension" type="number" value="3" min="0" />
+          </div>
+        </div>
+        <label>Dealer name</label>
+        <input id="dealerName" value="Dealer One" placeholder="Dealer One" />
+        <label>Optional extra JSON fields</label>
+        <textarea id="customerJson" placeholder='{"alt_name":"Amit Shah", "postal_code":"360001"}'></textarea>
+        <button id="sampleLeadBtn" class="warn" type="button">Load Sample Lead</button>
+        <button id="validateLeadBtn" class="secondary" type="button">Validate Lead</button>
+      </div>
+
+      <div style="margin-top:12px;">
+        <button id="connectBtn">Connect</button>
+        <button id="startBtn" disabled>Start Call</button>
+        <button id="stopBtn" class="danger" disabled>Stop</button>
+      </div>
+      <div>
+        <button id="micBtn" class="secondary" disabled>Enable Mic</button>
+        <button id="muteBtn" class="warn" disabled>Mute Mic</button>
+      </div>
+      <label>Typed text test</label>
+      <input id="typedText" placeholder="Type customer text here..." />
+      <button id="sendTextBtn" class="secondary" disabled>Send Text</button>
+
+      <div class="status">
+        <span class="pill" id="wsStatus">WS: disconnected</span>
+        <span class="pill" id="micStatus">Mic: off</span>
+        <span class="pill" id="playStatus">Playback: idle</span>
+        <span class="pill" id="bargeStatus">Barge-in: idle</span>
+        <span class="pill" id="bgStatus">BG: off</span>
+      </div>
+      <div class="meter"><div id="levelBar" class="bar"></div></div>
+      <p class="small">Keep this page on localhost or HTTPS, otherwise browser mic permission will fail.</p>
+      <h3 style="font-size:14px;">Logs</h3>
+      <div id="log"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="font-size:16px;margin:0 0 10px;">Live Transcript</h2>
+      <div id="transcript"></div>
+    </section>
+  </main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const logEl = $('log');
+  const transcriptEl = $('transcript');
+  const wsStatus = $('wsStatus');
+  const micStatus = $('micStatus');
+  const playStatus = $('playStatus');
+  const bargeStatus = $('bargeStatus');
+  const bgStatus = $('bgStatus');
+  const levelBar = $('levelBar');
+
+  let ws = null;
+  let audioCtx = null;
+  let micStream = null;
+  let processor = null;
+  let inputNode = null;
+  let muted = false;
+  let currentSource = null;
+  let playbackQueue = [];
+  let playing = false;
+  let callStarted = false;
+  let lastSentAt = 0;
+  let micDebugLastLog = 0;
+  let micChunkCount = 0;
+  let micSpeechHitCount = 0;
+  let bgAudio = null;
+  let honkTimer = null;
+  let honksPlayed = 0;
+  const MAX_HONKS_PER_CALL = 2;
+
+  function cleanBaseUrl() {
+    return backendUrl().replace(/\/$/, '');
+  }
+
+  function bgAssetUrl(filename) {
+    return cleanBaseUrl() + '/bg/' + encodeURIComponent(filename);
+  }
+
+  async function startContinuousBackground(reason = '') {
+    if (bgAudio) return;
+    try {
+      if (audioCtx == null) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+    } catch (e) {
+      // HTMLAudioElement can still try to play.
+    }
+
+    bgAudio = new Audio(bgAssetUrl('fan.mp3'));
+    bgAudio.loop = true;
+    bgAudio.volume = 0.035; // low, phone-call ambience level
+    bgAudio.crossOrigin = 'anonymous';
+    try {
+      await bgAudio.play();
+      setPill(bgStatus, 'BG: fan on', 'on');
+      log('Continuous background fan started' + (reason ? ' (' + reason + ')' : ''));
+    } catch (e) {
+      setPill(bgStatus, 'BG: blocked', 'warn');
+      log('Background fan could not autoplay. Click Enable Mic or Start Call again. ' + (e.message || e));
+      console.warn('[BG] fan play blocked/failed', e);
+    }
+    honksPlayed = 0;
+    scheduleHonk();
+  }
+
+  function scheduleHonk() {
+    if (honkTimer) clearTimeout(honkTimer);
+    if (!callStarted || honksPlayed >= MAX_HONKS_PER_CALL) return;
+    const delayMs = (45 + Math.random() * 45) * 1000;
+    honkTimer = setTimeout(playHonkOnce, delayMs);
+  }
+
+  async function playHonkOnce() {
+    if (!callStarted || honksPlayed >= MAX_HONKS_PER_CALL) return;
+    const files = ['honk.mp3', 'honk2.mp3', 'honk3.mp3'];
+    const file = files[Math.floor(Math.random() * files.length)];
+    const honk = new Audio(bgAssetUrl(file));
+    honk.volume = 0.06;
+    honk.crossOrigin = 'anonymous';
+    try {
+      await honk.play();
+      honksPlayed += 1;
+      setPill(bgStatus, 'BG: fan + honk', 'on');
+      log('Background honk played: ' + file);
+      honk.onended = () => setPill(bgStatus, bgAudio ? 'BG: fan on' : 'BG: off', bgAudio ? 'on' : '');
+    } catch (e) {
+      console.warn('[BG] honk failed', file, e);
+    }
+    scheduleHonk();
+  }
+
+  function stopContinuousBackground(reason = '') {
+    if (honkTimer) {
+      clearTimeout(honkTimer);
+      honkTimer = null;
+    }
+    if (bgAudio) {
+      try { bgAudio.pause(); } catch (e) {}
+      try { bgAudio.currentTime = 0; } catch (e) {}
+      bgAudio = null;
+    }
+    honksPlayed = 0;
+    setPill(bgStatus, 'BG: off');
+    if (reason) log('Continuous background stopped (' + reason + ')');
+  }
+
+  function setMicMuted(value, reason = '') {
+    muted = !!value;
+    const hasMic = !!micStream;
+    $('muteBtn').textContent = muted ? 'Unmute Mic' : 'Mute Mic';
+    setPill(micStatus, hasMic ? (muted ? 'Mic: muted' : 'Mic: on') : 'Mic: off', hasMic ? (muted ? 'warn' : 'on') : '');
+    console.log('[MIC] muted=' + muted + (reason ? ' reason=' + reason : ''));
+  }
+
+  function log(msg) {
+    const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logEl.textContent += line + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log(line);
+  }
+
+  function addMsg(speaker, text) {
+    const div = document.createElement('div');
+    div.className = `msg ${speaker}`;
+    div.innerHTML = `<strong>${speaker === 'bot' ? 'Bot' : speaker === 'customer' ? 'Customer' : 'System'}:</strong><br>${escapeHtml(text)}`;
+    transcriptEl.appendChild(div);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  }
+
+  function backendUrl() {
+    return $('backendUrl').value.replace(/\/$/, '');
+  }
+  function wsUrl() {
+    return backendUrl().replace(/^http/, 'ws') + '/ws/call';
+  }
+
+  function setPill(el, text, cls='') {
+    el.className = 'pill ' + cls;
+    el.textContent = text;
+  }
+
+  function dataMode() {
+    return $('dataMode').value;
+  }
+
+  function parseExtraJson() {
+    const raw = $('customerJson').value.trim();
+    if (!raw) return {};
+    try {
+      const obj = JSON.parse(raw);
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Extra JSON must be an object');
+      return obj;
+    } catch (e) {
+      throw new Error('Invalid extra JSON: ' + e.message);
+    }
+  }
+
+  function buildCustomerData() {
+    const extra = parseExtraJson();
+    const loanIdRaw = $('loanId').value.trim();
+    const due = Number($('dueAmount').value || 0);
+    const bucket = Number($('ptpBucket').value || 0);
+    const maxDays = Number($('maxPtpExtension').value || 0);
+    const data = Object.assign({}, extra, {
+      source: 'frontend',
+      first_name: $('firstName').value.trim(),
+      phone_number: $('phoneNumber').value.trim(),
+      loan_id: /^\d+$/.test(loanIdRaw) ? Number(loanIdRaw) : loanIdRaw,
+      due_amount: due,
+      installment_amount: due,
+      Loan_date: $('loanDate').value,
+      dealer_name: $('dealerName').value.trim(),
+      PTP_bucket: String(bucket),
+      Max_ptp_extension: maxDays,
+      exetended_ptp_date: extra.exetended_ptp_date || '',
+    });
+    if (!data.first_name) throw new Error('Customer name is required');
+    if (!data.loan_id && data.loan_id !== 0) throw new Error('Loan ID is required');
+    if (!data.due_amount || data.due_amount <= 0) throw new Error('Due amount must be greater than 0');
+    return data;
+  }
+
+  function fillSampleLead() {
+    $('firstName').value = 'Rahul Patel';
+    $('phoneNumber').value = '9991110001';
+    $('loanId').value = '701';
+    $('dueAmount').value = '2500';
+    $('loanDate').value = '2026-05-11';
+    $('ptpBucket').value = '0';
+    $('maxPtpExtension').value = '3';
+    $('dealerName').value = 'Dealer One';
+    $('customerJson').value = JSON.stringify({
+      title: 'TECLOAN1001',
+      alt_name: 'Amit Shah',
+      alt_phone: '8881110001',
+      last_name: 'Ramesh Patel',
+      refrence_mobile: '9876543211',
+      postal_code: '360001',
+      user_id: 501,
+      list_id: 1616,
+      email: ''
+    }, null, 2);
+  }
+
+  async function validateLead() {
+    try {
+      const res = await fetch(backendUrl() + '/customer/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_data: buildCustomerData() })
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.detail || out.message || 'validation failed');
+      log('Lead valid. PTP available: ' + out.ptp_available);
+      addMsg('system', 'Lead valid: ' + out.customer.first_name + ', loan ' + out.customer.loan_id + ', due Rs.' + out.customer.due_amount);
+    } catch (e) {
+      log('Lead validation error: ' + e.message);
+      addMsg('system', 'Lead validation error: ' + e.message);
+    }
+  }
+
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  function downsampleFloat32(buffer, inputRate, outputRate) {
+    if (outputRate === inputRate) return buffer;
+    const ratio = inputRate / outputRate;
+    const newLength = Math.round(buffer.length / ratio);
+    const result = new Float32Array(newLength);
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    while (offsetResult < result.length) {
+      const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+      let accum = 0, count = 0;
+      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+        accum += buffer[i]; count++;
+      }
+      result[offsetResult] = count ? accum / count : 0;
+      offsetResult++;
+      offsetBuffer = nextOffsetBuffer;
+    }
+    return result;
+  }
+
+  function floatTo16BitPCM(float32) {
+    const out = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+      let s = Math.max(-1, Math.min(1, float32[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+  }
+
+  function rmsFloat(buffer) {
+    let sum = 0;
+    for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
+    return Math.sqrt(sum / Math.max(1, buffer.length));
+  }
+
+  async function connectWs() {
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+    $('serverUrlPill').textContent = backendUrl();
+    ws = new WebSocket(wsUrl());
+    ws.onopen = () => {
+      setPill(wsStatus, 'WS: connected', 'on');
+      $('startBtn').disabled = false;
+      $('sendTextBtn').disabled = false;
+      log('WebSocket connected');
+    };
+    ws.onclose = () => {
+      setPill(wsStatus, 'WS: disconnected');
+      $('startBtn').disabled = true;
+      $('stopBtn').disabled = true;
+      $('sendTextBtn').disabled = true;
+      log('WebSocket closed');
+    };
+    ws.onerror = (e) => log('WebSocket error');
+    ws.onmessage = async (event) => {
+      const msg = JSON.parse(event.data);
+      handleServerMessage(msg);
+    };
+  }
+
+  async function handleServerMessage(msg) {
+    if (msg.type === 'ready') log('Server ready');
+    else if (msg.type === 'call_started') {
+      callStarted = true;
+      // Starting a new call must always unmute any existing mic stream.
+      // Previous call end / manual stop may have left muted=true, which caused
+      // "Mic detected audio | sent=false" even though RMS was visible.
+      setMicMuted(false, 'call_started');
+      $('stopBtn').disabled = false;
+      $('micBtn').disabled = !!micStream;
+      $('muteBtn').disabled = !micStream;
+      $('sendTextBtn').disabled = false;
+      log('Call started: ' + msg.call_id);
+      startContinuousBackground('call_started');
+    } else if (msg.type === 'bot_text') {
+      addMsg('bot', msg.text);
+    } else if (msg.type === 'bot_audio_wav') {
+      enqueueAudio(msg.audio);
+    } else if (msg.type === 'transcript') {
+      addMsg(msg.speaker === 'customer' ? 'customer' : 'system', msg.text);
+    } else if (msg.type === 'stop_playback') {
+      setPill(bargeStatus, 'Barge-in: detected', 'warn');
+      log('Barge-in detected; stopping playback');
+      stopPlayback();
+      setTimeout(() => setPill(bargeStatus, 'Barge-in: idle'), 1600);
+    } else if (msg.type === 'log') {
+      log(msg.message || 'server log');
+    } else if (msg.type === 'audio_debug') {
+      if (msg.debug && typeof msg.debug.rms === 'number') {
+        // log quietly every few seconds only in console
+        console.debug('audio_debug', msg.debug);
+      }
+    } else if (msg.type === 'agent_state') {
+      console.debug('agent_state', msg.state);
+    } else if (msg.type === 'agent_debug') {
+      const events = msg.events || [];
+      events.forEach((ev) => {
+        const copy = Object.assign({}, ev);
+        const name = copy.event || 'event';
+        delete copy.event;
+        delete copy.ts;
+        let details = '';
+        try { details = JSON.stringify(copy); } catch (e) { details = String(copy); }
+        if (details.length > 700) details = details.slice(0, 700) + '...';
+        log('AGENT ' + name + (details && details !== '{}' ? ' | ' + details : ''));
+      });
+    } else if (msg.type === 'call_ended') {
+      log('Call ended: ' + (msg.outcome || ''));
+      if (msg.customer) {
+        log('Final PTP bucket: ' + msg.customer.PTP_bucket + ' | extended date: ' + (msg.customer.exetended_ptp_date || ''));
+      }
+      callStarted = false;
+      $('stopBtn').disabled = true;
+      parkMicAfterCallEnd();
+      stopContinuousBackground('call_ended');
+      setPill(bargeStatus, 'Call closed', 'warn');
+      console.warn('[CALL] ended; mic stream is kept alive but audio will not be sent until a new call starts', msg);
+    } else if (msg.type === 'error') {
+      log('ERROR ' + (msg.where ? msg.where + ': ' : '') + msg.message);
+      addMsg('system', 'Error: ' + msg.message);
+    }
+  }
+
+  async function startCall() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) await connectWs();
+    try {
+      let payload = { type: 'start' };
+      if (dataMode() === 'frontend') {
+        payload.customer_data = buildCustomerData();
+        log('Starting call with frontend lead data: ' + payload.customer_data.first_name + ' / loan ' + payload.customer_data.loan_id);
+      } else {
+        payload.customer_ref = $('customerIndex').value || '0';
+        log('Starting call from data.json ref: ' + payload.customer_ref);
+      }
+      callStarted = false;
+      setMicMuted(false, 'start_call_clicked');
+      // Prepare AudioContext during user gesture so continuous background can play when the call starts.
+      if (audioCtx == null) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      ws.send(JSON.stringify(payload));
+      $('startBtn').disabled = true;
+      console.log('[CALL] start payload sent', payload);
+    } catch (e) {
+      log('Cannot start call: ' + e.message);
+      addMsg('system', 'Cannot start call: ' + e.message);
+    }
+  }
+
+  async function enableMic() {
+    try {
+      console.log('[MIC] Enable Mic clicked. callStarted=', callStarted, 'muted=', muted, 'wsState=', ws ? ws.readyState : 'no-ws');
+
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        throw new Error('Browser mic requires localhost or HTTPS. Current page is not a secure context.');
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('navigator.mediaDevices.getUserMedia is not available in this browser/page.');
+      }
+
+      if (audioCtx == null) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+      setMicMuted(false, 'enable_mic_clicked');  // IMPORTANT: call_end previously sets muted=true
+
+      // Stop any stale stream before opening a fresh one.
+      if (micStream) {
+        try { micStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+      }
+      if (processor) {
+        try { processor.disconnect(); } catch (e) {}
+      }
+      if (inputNode) {
+        try { inputNode.disconnect(); } catch (e) {}
+      }
+
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        }
+      });
+
+      const tracks = micStream.getAudioTracks();
+      console.log('[MIC] permission granted. Tracks:', tracks.map(t => ({ label: t.label, enabled: t.enabled, muted: t.muted, readyState: t.readyState, settings: t.getSettings ? t.getSettings() : {} })));
+      log('Mic permission granted: ' + (tracks[0]?.label || 'default microphone'));
+
+      inputNode = audioCtx.createMediaStreamSource(micStream);
+      processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      inputNode.connect(processor);
+      // Keep processor alive. Gain 0 prevents audible feedback/echo from this node.
+      const silentGain = audioCtx.createGain();
+      silentGain.gain.value = 0;
+      processor.connect(silentGain);
+      silentGain.connect(audioCtx.destination);
+
+      micChunkCount = 0;
+      micSpeechHitCount = 0;
+      micDebugLastLog = 0;
+
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        const level = rmsFloat(input);
+        micChunkCount++;
+        if (level > 0.008) micSpeechHitCount++;
+
+        levelBar.style.width = Math.min(100, Math.round(level * 1200)) + '%';
+
+        const now = performance.now();
+        if (now - micDebugLastLog > 1000) {
+          micDebugLastLog = now;
+          const wsOpen = !!ws && ws.readyState === WebSocket.OPEN;
+          let blockReason = null;
+          if (!wsOpen) blockReason = 'ws_not_open';
+          else if (!callStarted) blockReason = 'call_not_started_or_closed';
+          else if (muted) blockReason = 'mic_muted';
+          const state = {
+            rms: Number(level.toFixed(5)),
+            chunks: micChunkCount,
+            speechHits: micSpeechHitCount,
+            muted,
+            callStarted,
+            wsOpen,
+            blockReason,
+            audioCtxState: audioCtx.state
+          };
+          console.log('[MIC DEBUG]', state);
+          if (level > 0.008) {
+            const sentNow = callStarted && !muted && ws && ws.readyState === WebSocket.OPEN;
+            log('Mic detected audio rms=' + level.toFixed(4) + ' | sent=' + sentNow + (blockReason ? ' | reason=' + blockReason : ''));
+          }
+        }
+
+        // Detect mic even if call is closed, but do not send audio unless the call is active.
+        if (!ws || ws.readyState !== WebSocket.OPEN || muted || !callStarted) return;
+
+        const pcmFloat = downsampleFloat32(input, audioCtx.sampleRate, 16000);
+        const pcm16 = floatTo16BitPCM(pcmFloat);
+        ws.send(JSON.stringify({
+          type: 'audio_chunk',
+          sample_rate: 16000,
+          audio: arrayBufferToBase64(pcm16.buffer)
+        }));
+      };
+
+      if (callStarted && !bgAudio) startContinuousBackground('enable_mic_clicked');
+      setPill(micStatus, 'Mic: on', 'on');
+      $('micBtn').disabled = true;
+      $('muteBtn').disabled = false;
+      log('Mic enabled. Speak now; watch Console for [MIC DEBUG].');
+    } catch (e) {
+      console.error('[MIC ERROR]', e);
+      log('Mic error: ' + (e.message || e.name || e));
+      addMsg('system', 'Mic error: ' + (e.message || e.name || e));
+      setPill(micStatus, 'Mic: error', 'warn');
+    }
+  }
+
+  function muteToggle() {
+    setMicMuted(!muted, 'mute_button');
+    log(muted ? 'Mic muted' : 'Mic unmuted');
+  }
+
+  function enqueueAudio(base64wav) {
+    playbackQueue.push(base64wav);
+    if (!playing) playNext();
+  }
+
+  async function playNext() {
+    if (!playbackQueue.length) {
+      playing = false;
+      setPill(playStatus, 'Playback: idle');
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'playback_ended' }));
+      if (callStarted && micStream && muted) {
+        setMicMuted(false, 'playback_idle_auto_unmute');
+      }
+      return;
+    }
+    if (audioCtx == null) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const base64wav = playbackQueue.shift();
+    const arrayBuffer = base64ToArrayBuffer(base64wav);
+    let audioBuffer;
+    try {
+      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+    } catch (e) {
+      log('Could not decode bot audio: ' + e.message);
+      playNext();
+      return;
+    }
+    currentSource = audioCtx.createBufferSource();
+    currentSource.buffer = audioBuffer;
+    currentSource.connect(audioCtx.destination);
+    currentSource.onended = () => {
+      currentSource = null;
+      playNext();
+    };
+    playing = true;
+    setPill(playStatus, 'Playback: speaking', 'on');
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'playback_started' }));
+    currentSource.start();
+  }
+
+  function stopPlayback() {
+    playbackQueue = [];
+    if (currentSource) {
+      try { currentSource.stop(); } catch (e) {}
+      currentSource.disconnect();
+      currentSource = null;
+    }
+    playing = false;
+    setPill(playStatus, 'Playback: interrupted', 'warn');
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'playback_ended' }));
+  }
+
+  function sendTypedText() {
+    const text = $('typedText').value.trim();
+    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type:'text', text }));
+    $('typedText').value = '';
+  }
+
+  function parkMicAfterCallEnd() {
+    // Do NOT close the microphone automatically when the agent ends a call.
+    // The old desktop workflow immediately returned to listening after speech; for web mode
+    // we keep the browser MediaStream alive so the next call can start without asking mic
+    // permission again. Audio is still blocked from being sent because callStarted=false.
+    if (micStream) {
+      setMicMuted(false, 'call_ended_keep_alive');
+      setPill(micStatus, 'Mic: ready');
+      $('micBtn').disabled = true;
+      $('muteBtn').disabled = false;
+      log('Mic kept alive after call end; it will send again only after Start Call.');
+    } else {
+      setPill(micStatus, 'Mic: off');
+      $('micBtn').disabled = false;
+      $('muteBtn').disabled = true;
+    }
+    $('sendTextBtn').disabled = false;
+    $('startBtn').disabled = false;
+  }
+
+  async function stopCall() {
+    stopPlayback();
+    stopContinuousBackground('manual_stop');
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'stop' }));
+    callStarted = false;
+    if (processor) { try { processor.disconnect(); } catch(e) {} }
+    if (inputNode) { try { inputNode.disconnect(); } catch(e) {} }
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    micStream = null; inputNode = null; processor = null;
+    setMicMuted(true, 'manual_stop');
+    setPill(micStatus, 'Mic: off');
+    $('micBtn').disabled = false;
+    $('muteBtn').disabled = true;
+    console.log('[MIC] stopped manually');
+  }
+
+  $('connectBtn').onclick = connectWs;
+  $('startBtn').onclick = startCall;
+  $('micBtn').onclick = enableMic;
+  $('muteBtn').onclick = muteToggle;
+  $('sendTextBtn').onclick = sendTypedText;
+  $('stopBtn').onclick = stopCall;
+  $('sampleLeadBtn').onclick = fillSampleLead;
+  $('validateLeadBtn').onclick = validateLead;
+  $('dataMode').onchange = () => {
+    const useJson = dataMode() === 'json';
+    $('jsonRefBox').style.display = useJson ? 'block' : 'none';
+    $('leadForm').style.display = useJson ? 'none' : 'block';
+  };
+  $('typedText').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendTypedText(); });
+
+  $('serverUrlPill').textContent = backendUrl();
+  log('Open backend /health first, then Connect. For mic, use localhost or HTTPS.');
+})();
+</script>
+</body>
+</html>

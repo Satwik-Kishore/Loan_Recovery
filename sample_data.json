@@ -1,0 +1,25 @@
+[
+    {
+        "source": "api",
+        "function": "add_lead",
+        "list_id": 1616,
+        "title": "TECLOAN1001",
+        "first_name": "Rahul Patel",
+        "phone_number": "9991110001",
+        "alt_name": "Amit Shah",
+        "alt_phone": "8881110001",
+        "last_name": "Ramesh Patel",
+        "refrence_mobile": "9876543211",
+        "installment_amount": 2500,
+        "due_amount": 2500,
+        "PTP_bucket": "0",
+        "dealer_name": "Dealer One",
+        "email": "",
+        "postal_code": "360001",
+        "user_id": 501,
+        "Loan_date": "2026-05-11",
+        "Max_ptp_extension": 3,
+        "exetended_ptp_date": "2026-05-29",
+        "loan_id": 701
+    }
+]

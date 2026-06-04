@@ -1,0 +1,213 @@
+--- a/agent_core.py
++++ b/agent_core.py
+@@ -120,18 +120,39 @@
+ 
+ 
+ def looks_like_background_or_offtopic(text: str) -> bool:
+-    """Drop obvious unrelated browser/background transcripts only."""
++    """Drop obvious unrelated browser/background transcripts only.
++
++    Important: Sarvam/browser STT often returns Hindi speech in Roman script,
++    e.g. "ha mai rahul patel bol raha hu". The earlier filter treated any
++    4+ word non-Devanagari text without finance keywords as background audio,
++    which broke identity confirmation. Keep this filter conservative.
++    """
+     t = _norm(text)
+     if not t or _has_devanagari(text):
+         return False
+-    useful = (
+-        "pay", "payment", "emi", "loan", "ptp", "extension", "time", "day", "days", "fine", "late",
+-        "fee", "amount", "cibil", "confirm", "yes", "no", "sorry", "cannot", "can't", "money", "salary", "today",
++
++    tokens = set(t.split())
++
++    # Allow common Roman Hindi/Hinglish call words.
++    useful_tokens = {
++        "ha", "haan", "han", "hmm", "yes", "no", "nahi", "nahin",
++        "main", "mai", "me", "mera", "meri",
++        "bol", "bola", "bolu", "raha", "rha", "hu", "hun", "hoon", "speaking",
++        "aaj", "kal", "parso", "din", "time", "samay",
++        "pay", "payment", "emi", "loan", "ptp", "extension", "fine", "late",
++        "fee", "amount", "cibil", "confirm", "sorry", "cannot", "money",
++        "salary", "today", "paise", "paisa", "rupaye", "rupees",
++        "kar", "karo", "karunga", "karunga", "paunga", "possible",
++    }
++    useful_phrases = (
++        "bol raha", "bol rha", "bol rahi", "payment kar", "pay kar",
++        "paise nahi", "money nahi", "aaj nahi", "nahi kar",
+     )
+-    if any(w in t for w in useful):
++    if tokens & useful_tokens or any(p in t for p in useful_phrases):
+         return False
++
+     unrelated = ("new orleans", "history", "agriculture", "variable", "beginning", "next one", "inhibit")
+-    return any(w in t for w in unrelated) or (len(t.split()) >= 4 and not any(w in t for w in useful))
++    return any(w in t for w in unrelated)
+ 
+ 
+ _DAY_WORDS = {
+@@ -460,17 +481,21 @@
+             return self._result("माफ़ कीजिए, speech service में थोड़ी दिक्कत आ रही है। कृपया एक बार फिर बोलिए।")
+         if customer_wants_to_end(text):
+             return self._result("ठीक है, आपका समय देने के लिए धन्यवाद। कृपया payment जल्द से जल्द कर दीजिएगा।", should_end=True, outcome=Outcome.CUSTOMER_ENDED)
+-        if looks_like_background_or_offtopic(text):
+-            return self._result("माफ़ कीजिए, background से कुछ अलग audio आ गया लग रहा है। आप अपना जवाब एक बार साफ़ बोल दीजिए — payment today possible है या कोई specific सवाल है?")
+-
+-        # 1) Identity stage
++
++        # 1) Identity stage must run before background filtering because STT commonly
++        # returns Roman Hindi like "ha mai rahul patel bol rha hu".
+         if self.stage == Stage.IDENTITY:
+             if is_wrong_person(text):
+                 return self._result("माफ़ कीजिए, शायद wrong number connect हो गया। आपका समय लेने के लिए sorry.", should_end=True, outcome=Outcome.WRONG_PERSON)
+             if is_identity_confirmed(text):
+                 self.stage = Stage.ASK_PAYMENT
+                 return self._result(self._ask_payment())
++            if looks_like_background_or_offtopic(text):
++                return self._result("माफ़ कीजिए, background से कुछ अलग audio आ गया लग रहा है। क्या मैं सही व्यक्ति से बात कर रही हूँ, बस एक बार confirm कर दीजिए।")
+             return self._result(f"क्या मैं {self.display_name} जी से बात कर रही हूँ? बस confirm कर दीजिए।")
++
++        if looks_like_background_or_offtopic(text):
++            return self._result("माफ़ कीजिए, background से कुछ अलग audio आ गया लग रहा है। आप अपना जवाब एक बार साफ़ बोल दीजिए — payment today possible है या कोई specific सवाल है?")
+ 
+         # 2) Customer questions always have priority before refusal/reason logic
+         if asks_fine_or_late_fee(text):
+--- a/voice_io.py
++++ b/voice_io.py
+@@ -83,7 +83,7 @@
+     return len(pcm16) / 2 / sample_rate
+ 
+ 
+-def sarvam_stt_from_pcm16(pcm16: bytes, sample_rate: int = 16000, *, language_code: str = "unknown") -> str:
++def sarvam_stt_from_pcm16(pcm16: bytes, sample_rate: int = 16000, *, language_code: str = "hi-IN") -> str:
+     """Return transcript or STT_ERROR_TOKEN on service failure."""
+     if duration_secs_pcm16(pcm16, sample_rate) < 0.25:
+         return ""
+--- a/call.html
++++ b/call.html
+@@ -155,6 +155,10 @@
+   let playbackQueue = [];
+   let playing = false;
+   let callStarted = false;
++  let startInProgress = false;
++  let botOutputActive = false;      // true from bot_text until bot audio finishes
++  let suppressMicUntil = 0;         // short echo tail after playback
++  let silentGain = null;            // keeps ScriptProcessor alive without routing mic audio
+   let lastSentAt = 0;
+ 
+   function log(msg) {
+@@ -336,6 +340,9 @@
+       $('startBtn').disabled = true;
+       $('stopBtn').disabled = true;
+       $('sendTextBtn').disabled = true;
++      startInProgress = false;
++      botOutputActive = false;
++      callStarted = false;
+       log('WebSocket closed');
+     };
+     ws.onerror = (e) => log('WebSocket error');
+@@ -349,9 +356,13 @@
+     if (msg.type === 'ready') log('Server ready');
+     else if (msg.type === 'call_started') {
+       callStarted = true;
++      startInProgress = false;
+       $('stopBtn').disabled = false;
+       log('Call started: ' + msg.call_id);
+     } else if (msg.type === 'bot_text') {
++      // Block mic immediately when bot text arrives. TTS generation may take time,
++      // and we do not want to capture user/background audio during the bot turn.
++      botOutputActive = true;
+       addMsg('bot', msg.text);
+     } else if (msg.type === 'bot_audio_wav') {
+       enqueueAudio(msg.audio);
+@@ -372,6 +383,8 @@
+     } else if (msg.type === 'agent_state') {
+       console.debug('agent_state', msg.state);
+     } else if (msg.type === 'call_ended') {
++      botOutputActive = false;
++      startInProgress = false;
+       log('Call ended: ' + (msg.outcome || ''));
+       if (msg.customer) {
+         log('Final PTP bucket: ' + msg.customer.PTP_bucket + ' | extended date: ' + (msg.customer.exetended_ptp_date || ''));
+@@ -381,14 +394,25 @@
+       stopMicAfterCallEnd();
+       setPill(bargeStatus, 'Call closed', 'warn');
+     } else if (msg.type === 'error') {
++      if (msg.where === 'tts') botOutputActive = false;
++      startInProgress = false;
+       log('ERROR ' + (msg.where ? msg.where + ': ' : '') + msg.message);
+       addMsg('system', 'Error: ' + msg.message);
+     }
+   }
+ 
+   async function startCall() {
++    if (startInProgress || callStarted) {
++      log('Call is already starting/started; ignoring duplicate Start click');
++      return;
++    }
+     if (!ws || ws.readyState !== WebSocket.OPEN) await connectWs();
+     try {
++      transcriptEl.innerHTML = '';
++      playbackQueue = [];
++      playing = false;
++      botOutputActive = false;
++      startInProgress = true;
+       let payload = { type: 'start' };
+       if (dataMode() === 'frontend') {
+         payload.customer_data = buildCustomerData();
+@@ -400,6 +424,7 @@
+       ws.send(JSON.stringify(payload));
+       $('startBtn').disabled = true;
+     } catch (e) {
++      startInProgress = false;
+       log('Cannot start call: ' + e.message);
+       addMsg('system', 'Cannot start call: ' + e.message);
+     }
+@@ -419,9 +444,18 @@
+     inputNode = audioCtx.createMediaStreamSource(micStream);
+     processor = audioCtx.createScriptProcessor(4096, 1, 1);
+     inputNode.connect(processor);
+-    processor.connect(audioCtx.destination); // required in some browsers
++
++    // Required in some browsers, but keep gain at 0 so the mic is not routed
++    // back to speakers. Routing mic to speakers can create echo/feedback.
++    silentGain = audioCtx.createGain();
++    silentGain.gain.value = 0;
++    processor.connect(silentGain);
++    silentGain.connect(audioCtx.destination);
++
+     processor.onaudioprocess = (e) => {
+-      if (!ws || ws.readyState !== WebSocket.OPEN || muted) return;
++      const nowMs = performance.now();
++      // Hard turn-taking gate: never send mic audio during bot output or its echo tail.
++      if (!ws || ws.readyState !== WebSocket.OPEN || muted || !callStarted || botOutputActive || playing || nowMs < suppressMicUntil) return;
+       const input = e.inputBuffer.getChannelData(0);
+       const level = rmsFloat(input);
+       levelBar.style.width = Math.min(100, Math.round(level * 800)) + '%';
+@@ -454,6 +488,8 @@
+   async function playNext() {
+     if (!playbackQueue.length) {
+       playing = false;
++      botOutputActive = false;
++      suppressMicUntil = performance.now() + 800;
+       setPill(playStatus, 'Playback: idle');
+       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'playback_ended' }));
+       return;
+@@ -491,6 +527,8 @@
+       currentSource = null;
+     }
+     playing = false;
++    botOutputActive = false;
++    suppressMicUntil = performance.now() + 800;
+     setPill(playStatus, 'Playback: interrupted', 'warn');
+     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'playback_ended' }));
+   }
+@@ -520,6 +558,8 @@
+     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'stop' }));
+     if (micStream) micStream.getTracks().forEach(t => t.stop());
+     setPill(micStatus, 'Mic: off');
++    startInProgress = false;
++    botOutputActive = false;
+     $('micBtn').disabled = false;
+     $('muteBtn').disabled = true;
+   }
