@@ -27,6 +27,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 
+# Suppress verbose [AGENT_STEP] JSON logs from agent_core — the web server
+# emits its own clean per-turn logs instead. Set AGENT_DEBUG_LOGS=1 to re-enable.
+os.environ.setdefault("AGENT_DEBUG_LOGS", "0")
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -353,89 +357,170 @@ class CallRuntime:
 
 
 async def ws_send(ws: WebSocket, runtime: CallRuntime, payload: dict[str, Any]) -> None:
-    async with runtime.send_lock:
-        await ws.send_text(json.dumps(payload, ensure_ascii=False))
+    """Send a JSON payload to the browser. Silently drops the message if the socket is already closed."""
+    try:
+        async with runtime.send_lock:
+            if ws.client_state.value >= 3:   # DISCONNECTED / CLOSED
+                return
+            await ws.send_text(json.dumps(payload, ensure_ascii=False))
+    except Exception:
+        pass  # socket already closed — swallow silently
 
 
 async def send_agent_debug(ws: WebSocket, runtime: CallRuntime, result: dict[str, Any]) -> None:
-    """Send only new agent_core events to the browser log panel.
+    """Forward only meaningful new agent events to the browser debug log.
 
-    agent_core now logs each deterministic step plus each LLM guidance/response
-    event. This keeps the UI transparent without re-sending the full event list
-    after every customer turn.
+    Filters noisy internal bookkeeping (llm_guidance_prepared, llm_call_started,
+    etc.) and only surfaces stage transitions, errors, and outcomes.
     """
+    INTERESTING = {
+        "stage_transition", "bot_reply_final", "call_started",
+        "session_stopped_by_user", "strict_dynamic_generation_failed",
+        "llm_call_error", "call_closed",
+    }
     events = result.get("events") or []
     new_events = events[runtime.last_event_count:]
     runtime.last_event_count = len(events)
-    if new_events:
-        await ws_send(ws, runtime, {"type": "agent_debug", "events": new_events})
+
+    for ev in new_events:
+        name = ev.get("event", "event")
+        if name == "stage_transition":
+            print(f"[CALL {runtime.call_id}] \U0001f500  Stage: {ev.get('from_stage')} \u2192 {ev.get('to_stage')}")
+        elif name == "llm_call_error":
+            print(f"[CALL {runtime.call_id}] \u2717   LLM error (attempt {ev.get('attempt')}): {str(ev.get('error',''))[:120]}")
+        elif name == "strict_dynamic_generation_failed":
+            print(f"[CALL {runtime.call_id}] \u2717   LLM failed all retries")
+
+    filtered = [e for e in new_events if e.get("event") in INTERESTING]
+    if filtered:
+        await ws_send(ws, runtime, {"type": "agent_debug", "events": filtered})
 
 
 async def send_bot_reply(ws: WebSocket, runtime: CallRuntime, bot_text: str, *, final: bool = False, outcome: Optional[str] = None) -> None:
     runtime.transcript.append({"speaker": "bot", "text": bot_text, "ts": time.time()})
     await ws_send(ws, runtime, {"type": "bot_text", "text": bot_text, "final": final, "outcome": outcome})
+    tts_start = time.time()
     try:
         include_honk = runtime.should_mix_honk()
         wav_bytes = await asyncio.to_thread(
             sarvam_tts_wav,
             bot_text,
-            add_background=False,  # continuous browser-side background bed is used instead
+            add_background=False,
             include_honk=False,
         )
+        tts_ms = int((time.time() - tts_start) * 1000)
+        print(f"[CALL {runtime.call_id}] \u2705  TTS ({tts_ms}ms): {len(wav_bytes)} bytes ready for playback")
         await ws_send(ws, runtime, {
             "type": "bot_audio_wav",
             "audio": base64.b64encode(wav_bytes).decode("ascii"),
             "mime": "audio/wav",
             "final": final,
             "outcome": outcome,
+            "tts_ms": tts_ms,
         })
     except Exception as e:
+        print(f"[CALL {runtime.call_id}] \u2717   TTS error: {e}")
         await ws_send(ws, runtime, {"type": "error", "where": "tts", "message": str(e)})
+
+
+FILLER_PHRASES = [
+    "Ek second...",
+    "Haan, ek minute...",
+    "Ji, dekhti hoon...",
+    "Hmm, check kar rhi hoon...",
+    "Ok ji, ek second...",
+    "Ek min mai dekh rhi hoon...",
+    "Haan, record check kar rhi hoon...",
+]
+
+
+async def send_filler_if_slow(ws: WebSocket, runtime: CallRuntime, delay_task: asyncio.Task, threshold_sec: float = 1.1) -> None:
+    """After threshold_sec, if the main task is still running, send a filler TTS so silence doesn't feel dead."""
+    await asyncio.sleep(threshold_sec)
+    if not delay_task.done() and not runtime.closed:
+        phrase = random.choice(FILLER_PHRASES)
+        await ws_send(ws, runtime, {"type": "filler_text", "text": phrase})
+        try:
+            wav = await asyncio.to_thread(sarvam_tts_wav, phrase, add_background=False, include_honk=False)
+            await ws_send(ws, runtime, {
+                "type": "filler_audio_wav",
+                "audio": base64.b64encode(wav).decode("ascii"),
+                "mime": "audio/wav",
+            })
+        except Exception:
+            pass  # filler is best-effort
 
 
 async def process_customer_audio(ws: WebSocket, runtime: CallRuntime, pcm16: bytes) -> None:
     """Run STT -> agent -> TTS for one completed customer utterance.
 
-    This function is deliberately single-flight per call session. If multiple utterances are
-    generated by echo/background noise, only one can be processed at a time; the rest are
-    ignored upstream. This prevents the repeated same bot line / out-of-order reply problem.
+    Single-flight per session: if a prior utterance is still being processed,
+    the new one is dropped to prevent out-of-order / repeated replies.
     """
     if runtime.closed or runtime.session.closed:
         return
 
     if runtime.processing_lock.locked():
-        await ws_send(ws, runtime, {"type": "log", "message": "Dropped audio while previous STT/agent task was still processing"})
+        print(f"[CALL {runtime.call_id}] ⚠  Audio dropped — previous turn still processing")
         return
 
     async with runtime.processing_lock:
         if runtime.closed or runtime.session.closed:
             return
+
+        turn_start = time.time()
+        llm_ms = 0  # initialised here so it is always defined when we reach the latency send
         await ws_send(ws, runtime, {"type": "stt_started"})
+
+        # ── STT ──────────────────────────────────────────────────────────────
+        print(f"[CALL {runtime.call_id}] 🎤  STT: transcribing customer audio…")
+        stt_start = time.time()
         text = await asyncio.to_thread(sarvam_stt_from_pcm16, pcm16, runtime.detector.sample_rate)
+        stt_ms = int((time.time() - stt_start) * 1000)
+
         if text == STT_ERROR_TOKEN:
+            print(f"[CALL {runtime.call_id}] ✗   STT error — forwarding error token to agent")
             await ws_send(ws, runtime, {"type": "transcript", "speaker": "system", "text": "STT service error"})
             result = runtime.session.handle_user_text(STT_ERROR_TOKEN)
         elif not text.strip():
+            print(f"[CALL {runtime.call_id}] 🔇  STT: no speech detected, ignoring chunk")
             await ws_send(ws, runtime, {"type": "transcript", "speaker": "system", "text": "No clear speech detected"})
             return
         else:
-            # Drop exact duplicate transcripts produced by VAD splitting the same utterance.
+            # Drop exact duplicates from VAD splitting the same utterance
             now = time.time()
             if text == runtime.last_customer_text and now - runtime.last_customer_text_at < 2.5:
-                await ws_send(ws, runtime, {"type": "log", "message": f"Dropped duplicate transcript: {text}"})
+                print(f"[CALL {runtime.call_id}] 🔁  Duplicate transcript dropped: {text!r}")
                 return
             runtime.last_customer_text = text
             runtime.last_customer_text_at = now
 
+            print(f"[CALL {runtime.call_id}] ✅  STT ({stt_ms}ms): {text!r}")
             runtime.transcript.append({"speaker": "customer", "text": text, "ts": now})
             await ws_send(ws, runtime, {"type": "transcript", "speaker": "customer", "text": text})
-            result = runtime.session.handle_user_text(text)
+            await ws_send(ws, runtime, {"type": "latency", "phase": "stt", "ms": stt_ms})
 
+            # ── LLM ──────────────────────────────────────────────────────────
+            print(f"[CALL {runtime.call_id}] 🤖  LLM: generating reply…")
+            llm_start = time.time()
+            result = await asyncio.to_thread(runtime.session.handle_user_text, text)
+            llm_ms = int((time.time() - llm_start) * 1000)
+            print(f"[CALL {runtime.call_id}] ✅  LLM ({llm_ms}ms): {result.get('bot_text','')!r}")
+
+        # Guard: if call was closed while we were awaiting LLM, abort cleanly
+        if runtime.closed:
+            print(f"[CALL {runtime.call_id}] ⚠  Call closed while LLM was running — aborting reply")
+            return
+
+        await ws_send(ws, runtime, {"type": "latency", "phase": "llm", "ms": llm_ms})
         persist_dynamic_call_snapshot(runtime.call_id, runtime)
         await ws_send(ws, runtime, {"type": "agent_state", "state": result.get("state", {}), "customer": runtime.session.customer})
         await send_agent_debug(ws, runtime, result)
+
         bot_text = result.get("bot_text", "")
         if bot_text:
+            # ── TTS ──────────────────────────────────────────────────────────
+            print(f"[CALL {runtime.call_id}] 🔊  TTS: converting reply to speech…")
             await send_bot_reply(
                 ws,
                 runtime,
@@ -443,10 +528,22 @@ async def process_customer_audio(ws: WebSocket, runtime: CallRuntime, pcm16: byt
                 final=bool(result.get("should_end_call")),
                 outcome=result.get("outcome"),
             )
+
+        total_ms = int((time.time() - turn_start) * 1000)
+        print(f"[CALL {runtime.call_id}] ⏱  Turn complete in {total_ms}ms")
+        await ws_send(ws, runtime, {"type": "latency", "phase": "total_turn", "ms": total_ms})
+
         if result.get("should_end_call"):
             runtime.closed = True
             persist_dynamic_call_snapshot(runtime.call_id, runtime)
-            await ws_send(ws, runtime, {"type": "call_ended", "outcome": result.get("outcome"), "events": result.get("events", []), "customer": runtime.session.customer, "state": runtime.session._state()})
+            print(f"[CALL {runtime.call_id}] 📵  Call ended by agent — outcome: {result.get('outcome')}")
+            await ws_send(ws, runtime, {
+                "type": "call_ended",
+                "outcome": result.get("outcome"),
+                "events": result.get("events", []),
+                "customer": runtime.session.customer,
+                "state": runtime.session._state(),
+            })
 
 
 # ---------------------------------------------------------------------------
@@ -599,6 +696,7 @@ async def ws_call(ws: WebSocket):
 
                 runtime = CallRuntime(call_id=call_id, session=session)
                 SESSIONS[call_id] = runtime
+                print(f"[CALL {call_id}] 📞  Call started — customer: {customer_record.get('first_name','?')} / loan: {customer_record.get('loan_id','?')}")
                 start_result = session.start()
                 persist_dynamic_call_snapshot(call_id, runtime)
                 await ws_send(ws, runtime, {
@@ -632,10 +730,21 @@ async def ws_call(ws: WebSocket):
                 continue
             if typ == "stop":
                 runtime.closed = True
+                print(f"[CALL {runtime.call_id}] ⏹  Call stopped by operator")
                 result = runtime.session.stop()
                 persist_dynamic_call_snapshot(runtime.call_id, runtime)
                 await send_agent_debug(ws, runtime, result)
-                await ws_send(ws, runtime, {"type": "call_ended", "outcome": result.get("outcome"), "events": result.get("events", []), "customer": runtime.session.customer, "state": runtime.session._state()})
+                await ws_send(ws, runtime, {
+                    "type": "call_ended",
+                    "outcome": result.get("outcome"),
+                    "events": result.get("events", []),
+                    "customer": runtime.session.customer,
+                    "state": runtime.session._state(),
+                })
+                # Cancel any in-flight STT/LLM/TTS tasks before closing
+                for task in list(processing_tasks):
+                    task.cancel()
+                await asyncio.sleep(0.05)  # yield so tasks can handle cancellation
                 await ws.close()
                 break
             if typ == "text":

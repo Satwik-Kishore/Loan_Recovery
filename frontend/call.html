@@ -3,756 +3,984 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Loan Recovery Web Voice Agent</title>
+  <title>Priya — EMI Recovery Agent</title>
   <style>
-    :root { --bg:#0f172a; --panel:#111827; --line:#253044; --text:#e5e7eb; --muted:#94a3b8; --accent:#22c55e; --danger:#ef4444; --warn:#f59e0b; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: Inter, system-ui, Segoe UI, Arial, sans-serif; background: var(--bg); color: var(--text); }
-    header { padding:16px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-    h1 { font-size:18px; margin:0; }
-    main { display:grid; grid-template-columns: 360px 1fr; gap:16px; padding:16px; }
-    .card { background: var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow: 0 8px 28px rgba(0,0,0,.22); }
-    label { display:block; font-size:13px; color:var(--muted); margin:10px 0 6px; }
-    input, select, textarea { width:100%; background:#0b1020; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px; }
-    textarea { min-height:92px; resize:vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; }
-    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .sectionTitle { margin:14px 0 6px; color:#cbd5e1; font-size:13px; font-weight:800; }
-    button { border:0; border-radius:10px; padding:10px 12px; color:#07120a; background:var(--accent); font-weight:700; cursor:pointer; margin:6px 6px 6px 0; }
-    button.secondary { background:#38bdf8; color:#04121a; }
-    button.danger { background:var(--danger); color:white; }
-    button.warn { background:var(--warn); color:#1f1300; }
-    button:disabled { opacity:.5; cursor:not-allowed; }
-    .status { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
-    .pill { border:1px solid var(--line); background:#0b1020; padding:6px 9px; border-radius:999px; font-size:12px; color:var(--muted); }
-    .pill.on { color:#bbf7d0; border-color:#22c55e; }
-    .pill.warn { color:#fde68a; border-color:#f59e0b; }
-    #log { height:210px; overflow:auto; background:#050914; border:1px solid var(--line); border-radius:10px; padding:10px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; white-space:pre-wrap; }
-    #transcript { height:68vh; overflow:auto; padding-right:6px; }
-    .msg { margin:10px 0; padding:12px 14px; border-radius:14px; max-width:780px; line-height:1.45; }
-    .customer { background:#1e293b; margin-left:auto; border-top-right-radius:4px; }
-    .bot { background:#064e3b; border-top-left-radius:4px; }
-    .system { background:#3f2b04; color:#fde68a; max-width:100%; }
-    .small { color:var(--muted); font-size:12px; margin-top:4px; }
-    .meter { height:8px; background:#0b1020; border:1px solid var(--line); border-radius:999px; overflow:hidden; margin-top:8px; }
-    .bar { height:100%; width:0%; background:var(--accent); transition: width .08s linear; }
-    @media(max-width:900px){ main{ grid-template-columns:1fr; } #transcript{height:55vh;} }
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2234;
+      --border: #1f2d44;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --accent2: #22c55e;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+      --bot-bg: #0c2340;
+      --customer-bg: #1a2234;
+      --system-bg: #2a1a00;
+      --glow-green: 0 0 18px rgba(34,197,94,.35);
+      --glow-blue:  0 0 18px rgba(59,130,246,.35);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ── */
+    header {
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #3b82f6, #22c55e);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .header-title { font-size: 16px; font-weight: 700; }
+    .header-sub { font-size: 12px; color: var(--muted); }
+    .header-right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+    /* ── LATENCY BADGE ── */
+    .latency-strip {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .lat-badge {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; padding: 3px 8px; border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      transition: all .3s;
+    }
+    .lat-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+    .lat-badge.good .dot { background: var(--accent2); }
+    .lat-badge.ok   .dot { background: var(--warn); }
+    .lat-badge.slow .dot { background: var(--danger); }
+    .lat-badge.good { color: #86efac; border-color: #22c55e44; }
+    .lat-badge.ok   { color: #fde68a; border-color: #f59e0b44; }
+    .lat-badge.slow { color: #fca5a5; border-color: #ef444444; }
+
+    /* ── MAIN LAYOUT ── */
+    main {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      flex: 1;
+      overflow: hidden;
+      gap: 0;
+    }
+
+    /* ── LEFT PANEL ── */
+    .left-panel {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 16px;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel-section { display: flex; flex-direction: column; gap: 8px; }
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--muted);
+      padding-bottom: 4px; border-bottom: 1px solid var(--border);
+    }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+    input, select, textarea {
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      transition: border-color .2s;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { min-height: 72px; resize: vertical; font-family: ui-monospace, monospace; font-size: 11px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    /* ── BUTTONS ── */
+    .btn {
+      border: 0; border-radius: 8px; padding: 9px 14px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: all .15s; white-space: nowrap;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary  { background: var(--accent);  color: white; }
+    .btn-primary:hover:not(:disabled)  { background: #2563eb; box-shadow: var(--glow-blue); }
+    .btn-success  { background: var(--accent2); color: #022b0e; }
+    .btn-success:hover:not(:disabled) { background: #16a34a; box-shadow: var(--glow-green); }
+    .btn-danger   { background: var(--danger);  color: white; }
+    .btn-danger:hover:not(:disabled)  { background: #dc2626; }
+    .btn-warn     { background: var(--warn);    color: #1a0e00; }
+    .btn-ghost    { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ── CALL CONTROL CARD ── */
+    .call-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    /* ── STATUS INDICATORS ── */
+    .status-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    }
+    .stat-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      display: flex; align-items: center; gap: 7px;
+      font-size: 12px;
+    }
+    .stat-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted); flex-shrink: 0;
+      transition: background .3s, box-shadow .3s;
+    }
+    .stat-dot.on     { background: var(--accent2); box-shadow: 0 0 6px #22c55e88; }
+    .stat-dot.warn   { background: var(--warn);    box-shadow: 0 0 6px #f59e0b88; }
+    .stat-dot.active { background: var(--accent);  box-shadow: 0 0 6px #3b82f688; }
+    .stat-dot.error  { background: var(--danger);  box-shadow: 0 0 6px #ef444488; }
+
+    /* ── MIC LEVEL ── */
+    .level-wrap { display: flex; align-items: center; gap: 8px; }
+    .level-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .level-bar-bg { flex: 1; height: 6px; background: var(--bg); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+    .level-bar { height: 100%; width: 0; background: var(--accent2); border-radius: 999px; transition: width .07s linear; }
+
+    /* ── TEXT INPUT ROW ── */
+    .text-row { display: flex; gap: 6px; }
+    .text-row input { flex: 1; }
+
+    /* ── RIGHT PANEL — TRANSCRIPT ── */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .transcript-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .transcript-header h2 { font-size: 14px; margin: 0; }
+    #transcript {
+      flex: 1; overflow-y: auto; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    /* Scrollbar */
+    #transcript::-webkit-scrollbar { width: 4px; }
+    #transcript::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── MESSAGES ── */
+    .msg {
+      max-width: 72%; padding: 10px 14px; border-radius: 14px;
+      font-size: 14px; line-height: 1.5; position: relative;
+      animation: msgIn .18s ease-out;
+    }
+    @keyframes msgIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .msg-meta { font-size: 11px; color: var(--muted); margin-top: 4px; display: flex; gap: 8px; align-items: center; }
+    .msg.bot { background: var(--bot-bg); border: 1px solid #1e3a5f; border-top-left-radius: 4px; align-self: flex-start; }
+    .msg.customer { background: var(--customer-bg); border: 1px solid var(--border); border-top-right-radius: 4px; align-self: flex-end; }
+    .msg.system { background: var(--system-bg); color: #fde68a; border: 1px solid #5a3d00; max-width: 90%; align-self: center; font-size: 12px; text-align: center; }
+    .msg.filler {
+      background: #0d1f12; border: 1px dashed #22533033;
+      font-style: italic; color: #6ee7b7; opacity: .75;
+      border-top-left-radius: 4px; align-self: flex-start;
+    }
+    .msg.thinking {
+      align-self: flex-start;
+      padding: 10px 14px;
+    }
+    .thinking-dots { display: flex; gap: 5px; align-items: center; }
+    .thinking-dots span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent); opacity: .4;
+      animation: dotBounce 1.2s infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: .2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes dotBounce {
+      0%,80%,100% { transform: translateY(0); opacity:.4; }
+      40% { transform: translateY(-6px); opacity:1; }
+    }
+
+    .tts-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 10px; padding: 1px 6px; border-radius: 999px;
+      background: #0c2340; border: 1px solid #1e3a5f; color: #93c5fd;
+    }
+
+    /* ── OUTCOME BANNER ── */
+    .outcome-banner {
+      display: none; margin: 12px 18px;
+      padding: 12px 16px; border-radius: 10px;
+      border: 1px solid var(--border);
+      font-size: 14px; font-weight: 600;
+      align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .outcome-banner.show { display: flex; }
+    .outcome-banner.ptp    { background: #0c2340; border-color: #22d3ee44; color: #67e8f9; }
+    .outcome-banner.commit { background: #0c2b10; border-color: #22c55e44; color: #86efac; }
+    .outcome-banner.esc    { background: #2a0a00; border-color: #ef444444; color: #fca5a5; }
+    .outcome-banner.end    { background: #1a1a2e; border-color: #6366f144; color: #c4b5fd; }
+
+    /* ── LOG AREA ── */
+    .log-toggle { font-size: 11px; color: var(--muted); cursor: pointer; user-select: none; }
+    .log-toggle:hover { color: var(--text); }
+    #logWrap {
+      max-height: 0; overflow: hidden;
+      transition: max-height .3s ease;
+    }
+    #logWrap.open { max-height: 180px; }
+    #log {
+      height: 160px; overflow-y: auto; margin: 4px 0 0;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px;
+      font-family: ui-monospace, monospace; font-size: 11px;
+      color: var(--muted); white-space: pre-wrap;
+    }
+    #log::-webkit-scrollbar { width: 4px; }
+    #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── CALL PHASE PROGRESS ── */
+    .phase-bar {
+      display: flex; gap: 3px; padding: 8px 0;
+    }
+    .phase-step {
+      flex: 1; height: 4px; border-radius: 999px;
+      background: var(--border); transition: background .4s;
+    }
+    .phase-step.done    { background: var(--accent2); }
+    .phase-step.active  { background: var(--accent); animation: pulsebar 1s infinite alternate; }
+    .phase-step.skipped { background: var(--muted); }
+    @keyframes pulsebar { from { opacity:.6; } to { opacity:1; } }
+    .phase-labels { display: flex; gap: 3px; }
+    .phase-label { flex: 1; font-size: 10px; color: var(--muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .phase-label.active { color: var(--accent); font-weight: 600; }
+    .phase-label.done   { color: var(--accent2); }
+
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; }
+      .left-panel { max-height: 44vh; }
+      #transcript { max-height: 44vh; }
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>EMI Support Voice Assistant</h1>
-    <div class="pill" id="serverUrlPill"></div>
-  </header>
 
-  <main>
-    <section class="card">
-      <h2 style="font-size:16px;margin:0 0 10px;">Call Controls</h2>
-      <label>Backend URL</label>
-      <input id="backendUrl" value="http://localhost:8000" />
+<header>
+  <div class="logo">🎙</div>
+  <div>
+    <div class="header-title">Priya — EMI Recovery Agent</div>
+    <div class="header-sub" id="serverUrlPill">Not connected</div>
+  </div>
+  <div class="header-right">
+    <div class="latency-strip" id="latencyStrip">
+      <div class="lat-badge" id="latSTT" title="Speech-to-text latency">
+        <span class="dot"></span><span>STT —</span>
+      </div>
+      <div class="lat-badge" id="latLLM" title="LLM response latency">
+        <span class="dot"></span><span>LLM —</span>
+      </div>
+      <div class="lat-badge" id="latTTS" title="TTS synthesis latency">
+        <span class="dot"></span><span>TTS —</span>
+      </div>
+      <div class="lat-badge" id="latTotal" title="Total turn latency">
+        <span class="dot"></span><span>Turn —</span>
+      </div>
+    </div>
+  </div>
+</header>
 
+<main>
+  <!-- LEFT -->
+  <div class="left-panel">
+
+    <div class="panel-section">
+      <div class="section-label">Connection</div>
+      <div>
+        <label>Backend URL</label>
+        <input id="backendUrl" value="http://localhost:8000" />
+      </div>
       <label>Data source</label>
       <select id="dataMode">
         <option value="frontend" selected>Use lead data from this form</option>
-        <option value="json">Load existing customer from data.json</option>
+        <option value="json">Load from data.json</option>
       </select>
-
       <div id="jsonRefBox" style="display:none;">
-        <label>Customer ID / Loan ID / Row Index</label>
-        <input id="customerIndex" value="701" type="text" placeholder="e.g. 701 or 0" />
+        <label>Customer / Loan ID / Row Index</label>
+        <input id="customerIndex" value="701" type="text" />
       </div>
+    </div>
 
-      <div id="leadForm">
-        <div class="sectionTitle">Lead / Customer data</div>
+    <div class="panel-section" id="leadForm">
+      <div class="section-label">Lead / Customer</div>
+      <div>
         <label>Customer name</label>
-        <input id="firstName" value="Rahul Patel" placeholder="Rahul Patel" />
-        <div class="grid2">
-          <div>
-            <label>Phone</label>
-            <input id="phoneNumber" value="9991110001" placeholder="9991110001" />
-          </div>
-          <div>
-            <label>Loan ID</label>
-            <input id="loanId" value="701" placeholder="701" />
-          </div>
-        </div>
-        <div class="grid2">
-          <div>
-            <label>Due amount</label>
-            <input id="dueAmount" type="number" value="2500" />
-          </div>
-          <div>
-            <label>Loan date</label>
-            <input id="loanDate" type="date" value="2026-05-11" />
-          </div>
-        </div>
-        <div class="grid2">
-          <div>
-            <label>PTP bucket used</label>
-            <input id="ptpBucket" type="number" value="0" min="0" />
-          </div>
-          <div>
-            <label>Max PTP extension days</label>
-            <input id="maxPtpExtension" type="number" value="3" min="0" />
-          </div>
-        </div>
-        <label>Dealer name</label>
-        <input id="dealerName" value="Dealer One" placeholder="Dealer One" />
-        <label>Optional extra JSON fields</label>
-        <textarea id="customerJson" placeholder='{"alt_name":"Amit Shah", "postal_code":"360001"}'></textarea>
-        <button id="sampleLeadBtn" class="warn" type="button">Load Sample Lead</button>
-        <button id="validateLeadBtn" class="secondary" type="button">Validate Lead</button>
+        <input id="firstName" value="Rahul Patel" />
       </div>
-
-      <div style="margin-top:12px;">
-        <button id="connectBtn">Connect</button>
-        <button id="startBtn" disabled>Start Call</button>
-        <button id="stopBtn" class="danger" disabled>Stop</button>
+      <div class="grid2">
+        <div><label>Phone</label><input id="phoneNumber" value="9991110001" /></div>
+        <div><label>Loan ID</label><input id="loanId" value="701" /></div>
+      </div>
+      <div class="grid2">
+        <div><label>Due amount (₹)</label><input id="dueAmount" type="number" value="2500" /></div>
+        <div><label>Loan date</label><input id="loanDate" type="date" value="2026-05-11" /></div>
+      </div>
+      <div class="grid2">
+        <div><label>PTP bucket used</label><input id="ptpBucket" type="number" value="0" min="0" /></div>
+        <div><label>Max PTP extension (days)</label><input id="maxPtpExtension" type="number" value="3" min="0" /></div>
       </div>
       <div>
-        <button id="micBtn" class="secondary" disabled>Enable Mic</button>
-        <button id="muteBtn" class="warn" disabled>Mute Mic</button>
+        <label>Dealer name</label>
+        <input id="dealerName" value="Dealer One" />
       </div>
-      <label>Typed text test</label>
-      <input id="typedText" placeholder="Type customer text here..." />
-      <button id="sendTextBtn" class="secondary" disabled>Send Text</button>
-
-      <div class="status">
-        <span class="pill" id="wsStatus">WS: disconnected</span>
-        <span class="pill" id="micStatus">Mic: off</span>
-        <span class="pill" id="playStatus">Playback: idle</span>
-        <span class="pill" id="bargeStatus">Barge-in: idle</span>
-        <span class="pill" id="bgStatus">BG: off</span>
+      <div>
+        <label>Extra JSON fields (optional)</label>
+        <textarea id="customerJson" placeholder='{"alt_name":"Amit Shah"}'></textarea>
       </div>
-      <div class="meter"><div id="levelBar" class="bar"></div></div>
-      <p class="small">Keep this page on localhost or HTTPS, otherwise browser mic permission will fail.</p>
-      <h3 style="font-size:14px;">Logs</h3>
-      <div id="log"></div>
-    </section>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="sampleLeadBtn" type="button">📋 Sample</button>
+        <button class="btn btn-ghost" id="validateLeadBtn" type="button">✔ Validate</button>
+      </div>
+    </div>
 
-    <section class="card">
-      <h2 style="font-size:16px;margin:0 0 10px;">Live Transcript</h2>
-      <div id="transcript"></div>
-    </section>
-  </main>
+    <div class="panel-section">
+      <div class="section-label">Call Controls</div>
+      <div class="call-card">
+        <div class="btn-row">
+          <button class="btn btn-primary"  id="connectBtn">⚡ Connect</button>
+          <button class="btn btn-success"  id="startBtn" disabled>📞 Start Call</button>
+          <button class="btn btn-danger"   id="stopBtn"  disabled>⏹ End Call</button>
+        </div>
+
+        <!-- Phase progress bar -->
+        <div style="margin-top:10px;">
+          <div class="phase-bar" id="phaseBar">
+            <div class="phase-step" id="ps0"></div>
+            <div class="phase-step" id="ps1"></div>
+            <div class="phase-step" id="ps2"></div>
+            <div class="phase-step" id="ps3"></div>
+            <div class="phase-step" id="ps4"></div>
+          </div>
+          <div class="phase-labels">
+            <div class="phase-label" id="pl0">Identity</div>
+            <div class="phase-label" id="pl1">Ask Pay</div>
+            <div class="phase-label" id="pl2">Negotiate</div>
+            <div class="phase-label" id="pl3">Reason</div>
+            <div class="phase-label" id="pl4">Closed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Status</div>
+      <div class="status-grid">
+        <div class="stat-item"><div class="stat-dot" id="dotWS"></div><span id="txtWS">Disconnected</span></div>
+        <div class="stat-item"><div class="stat-dot" id="dotMic"></div><span id="txtMic">Mic off</span></div>
+        <div class="stat-item"><div class="stat-dot" id="dotPlay"></div><span id="txtPlay">Idle</span></div>
+        <div class="stat-item"><div class="stat-dot" id="dotBarge"></div><span id="txtBarge">Barge: idle</span></div>
+      </div>
+      <div class="level-wrap" style="margin-top:4px;">
+        <span class="level-label">🎤 Level</span>
+        <div class="level-bar-bg"><div id="levelBar" class="level-bar"></div></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Type to test</div>
+      <div class="text-row">
+        <input id="typedText" placeholder="Type customer text…" />
+        <button class="btn btn-ghost" id="sendTextBtn" disabled>Send</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" id="logToggleRow">
+        <span>Debug Log</span><span class="log-toggle" id="logToggleArrow">▶ show</span>
+      </div>
+      <div id="logWrap"><div id="log"></div></div>
+    </div>
+
+  </div><!-- /left-panel -->
+
+  <!-- RIGHT -->
+  <div class="right-panel">
+    <div class="transcript-header">
+      <h2>Live Conversation</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="callTimer" style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;">00:00</span>
+        <div class="stat-item" style="padding:4px 10px;">
+          <div class="stat-dot" id="dotProcessing"></div>
+          <span id="txtProcessing" style="font-size:12px;">Idle</span>
+        </div>
+      </div>
+    </div>
+    <div id="outcome-banner" class="outcome-banner"></div>
+    <div id="transcript"></div>
+  </div>
+</main>
 
 <script>
 (() => {
-  const $ = (id) => document.getElementById(id);
+  /* ── HELPERS ── */
+  const $ = id => document.getElementById(id);
   const logEl = $('log');
   const transcriptEl = $('transcript');
-  const wsStatus = $('wsStatus');
-  const micStatus = $('micStatus');
-  const playStatus = $('playStatus');
-  const bargeStatus = $('bargeStatus');
-  const bgStatus = $('bgStatus');
-  const levelBar = $('levelBar');
 
-  let ws = null;
-  let audioCtx = null;
-  let micStream = null;
-  let processor = null;
-  let inputNode = null;
-  let muted = false;
-  let currentSource = null;
-  let playbackQueue = [];
-  let playing = false;
-  let callStarted = false;
-  let lastSentAt = 0;
-  let micDebugLastLog = 0;
-  let micChunkCount = 0;
-  let micSpeechHitCount = 0;
-  let bgAudio = null;
-  let honkTimer = null;
-  let honksPlayed = 0;
-  const MAX_HONKS_PER_CALL = 2;
+  let ws = null, audioCtx = null, micStream = null, processor = null, inputNode = null;
+  let muted = false, callStarted = false;
+  let currentSource = null, playbackQueue = [], playing = false;
+  let bgAudio = null, honkTimer = null, honksPlayed = 0;
+  const MAX_HONKS = 2;
+  let thinkingEl = null;
+  let callTimerInterval = null;
+  let callStartTs = 0;
+  let micChunkCount = 0, micDebugLast = 0;
 
-  function cleanBaseUrl() {
-    return backendUrl().replace(/\/$/, '');
-  }
+  // Latency rolling avg
+  const latStats = { stt: [], llm: [], tts: [], total: [] };
 
-  function bgAssetUrl(filename) {
-    return cleanBaseUrl() + '/bg/' + encodeURIComponent(filename);
-  }
-
-  async function startContinuousBackground(reason = '') {
-    if (bgAudio) return;
-    try {
-      if (audioCtx == null) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-    } catch (e) {
-      // HTMLAudioElement can still try to play.
-    }
-
-    bgAudio = new Audio(bgAssetUrl('fan.mp3'));
-    bgAudio.loop = true;
-    bgAudio.volume = 0.035; // low, phone-call ambience level
-    bgAudio.crossOrigin = 'anonymous';
-    try {
-      await bgAudio.play();
-      setPill(bgStatus, 'BG: fan on', 'on');
-      log('Continuous background fan started' + (reason ? ' (' + reason + ')' : ''));
-    } catch (e) {
-      setPill(bgStatus, 'BG: blocked', 'warn');
-      log('Background fan could not autoplay. Click Enable Mic or Start Call again. ' + (e.message || e));
-      console.warn('[BG] fan play blocked/failed', e);
-    }
-    honksPlayed = 0;
-    scheduleHonk();
-  }
-
-  function scheduleHonk() {
-    if (honkTimer) clearTimeout(honkTimer);
-    if (!callStarted || honksPlayed >= MAX_HONKS_PER_CALL) return;
-    const delayMs = (45 + Math.random() * 45) * 1000;
-    honkTimer = setTimeout(playHonkOnce, delayMs);
-  }
-
-  async function playHonkOnce() {
-    if (!callStarted || honksPlayed >= MAX_HONKS_PER_CALL) return;
-    const files = ['honk.mp3', 'honk2.mp3', 'honk3.mp3'];
-    const file = files[Math.floor(Math.random() * files.length)];
-    const honk = new Audio(bgAssetUrl(file));
-    honk.volume = 0.06;
-    honk.crossOrigin = 'anonymous';
-    try {
-      await honk.play();
-      honksPlayed += 1;
-      setPill(bgStatus, 'BG: fan + honk', 'on');
-      log('Background honk played: ' + file);
-      honk.onended = () => setPill(bgStatus, bgAudio ? 'BG: fan on' : 'BG: off', bgAudio ? 'on' : '');
-    } catch (e) {
-      console.warn('[BG] honk failed', file, e);
-    }
-    scheduleHonk();
-  }
-
-  function stopContinuousBackground(reason = '') {
-    if (honkTimer) {
-      clearTimeout(honkTimer);
-      honkTimer = null;
-    }
-    if (bgAudio) {
-      try { bgAudio.pause(); } catch (e) {}
-      try { bgAudio.currentTime = 0; } catch (e) {}
-      bgAudio = null;
-    }
-    honksPlayed = 0;
-    setPill(bgStatus, 'BG: off');
-    if (reason) log('Continuous background stopped (' + reason + ')');
-  }
-
-  function setMicMuted(value, reason = '') {
-    muted = !!value;
-    const hasMic = !!micStream;
-    $('muteBtn').textContent = muted ? 'Unmute Mic' : 'Mute Mic';
-    setPill(micStatus, hasMic ? (muted ? 'Mic: muted' : 'Mic: on') : 'Mic: off', hasMic ? (muted ? 'warn' : 'on') : '');
-    console.log('[MIC] muted=' + muted + (reason ? ' reason=' + reason : ''));
-  }
-
+  /* ── LOG ── */
   function log(msg) {
-    const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    logEl.textContent += line + "\n";
+    const t = new Date().toLocaleTimeString('en-IN', { hour12: false });
+    logEl.textContent += `[${t}] ${msg}\n`;
     logEl.scrollTop = logEl.scrollHeight;
-    console.log(line);
+  }
+  $('logToggleRow').onclick = () => {
+    const wrap = $('logWrap');
+    const open = wrap.classList.toggle('open');
+    $('logToggleArrow').textContent = open ? '▼ hide' : '▶ show';
+  };
+
+  /* ── ESCAPE ── */
+  function esc(t) {
+    return String(t).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   }
 
-  function addMsg(speaker, text) {
-    const div = document.createElement('div');
-    div.className = `msg ${speaker}`;
-    div.innerHTML = `<strong>${speaker === 'bot' ? 'Bot' : speaker === 'customer' ? 'Customer' : 'System'}:</strong><br>${escapeHtml(text)}`;
-    transcriptEl.appendChild(div);
+  /* ── MESSAGES ── */
+  function addMsg(type, text, meta = '') {
+    removeThinking();
+    const el = document.createElement('div');
+    el.className = `msg ${type}`;
+    let speaker = type === 'bot' ? '🤖 Priya' : type === 'customer' ? '👤 Customer' : '⚙ System';
+    el.innerHTML = `<div><strong>${speaker}:</strong> ${esc(text)}</div>` +
+      (meta ? `<div class="msg-meta">${meta}</div>` : '');
+    transcriptEl.appendChild(el);
     transcriptEl.scrollTop = transcriptEl.scrollHeight;
   }
 
-  function escapeHtml(text) {
-    return String(text).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  function addFillerMsg(text) {
+    const el = document.createElement('div');
+    el.className = 'msg filler';
+    el.innerHTML = `<em>${esc(text)}</em>`;
+    el.id = 'filler-msg';
+    transcriptEl.appendChild(el);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
   }
 
-  function backendUrl() {
-    return $('backendUrl').value.replace(/\/$/, '');
-  }
-  function wsUrl() {
-    return backendUrl().replace(/^http/, 'ws') + '/ws/call';
+  function removeFillerMsg() {
+    const old = $('filler-msg');
+    if (old) old.remove();
   }
 
-  function setPill(el, text, cls='') {
-    el.className = 'pill ' + cls;
-    el.textContent = text;
+  function showThinking() {
+    if (thinkingEl) return;
+    thinkingEl = document.createElement('div');
+    thinkingEl.className = 'msg thinking';
+    thinkingEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
+    transcriptEl.appendChild(thinkingEl);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
   }
 
-  function dataMode() {
-    return $('dataMode').value;
+  function removeThinking() {
+    if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
   }
 
-  function parseExtraJson() {
-    const raw = $('customerJson').value.trim();
-    if (!raw) return {};
-    try {
-      const obj = JSON.parse(raw);
-      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Extra JSON must be an object');
-      return obj;
-    } catch (e) {
-      throw new Error('Invalid extra JSON: ' + e.message);
-    }
+  /* ── LATENCY DISPLAY ── */
+  function updateLatBadge(id, ms) {
+    const el = $(id);
+    if (!el) return;
+    const key = id.replace('lat','').toLowerCase();
+    const arr = latStats[key] || [];
+    arr.push(ms);
+    if (arr.length > 5) arr.shift();
+    const avg = Math.round(arr.reduce((a,b)=>a+b,0)/arr.length);
+    const cls = ms < 600 ? 'good' : ms < 1500 ? 'ok' : 'slow';
+    el.className = `lat-badge ${cls}`;
+    el.querySelector('span:last-child').textContent = `${key.toUpperCase()} ${avg}ms`;
   }
 
-  function buildCustomerData() {
-    const extra = parseExtraJson();
-    const loanIdRaw = $('loanId').value.trim();
-    const due = Number($('dueAmount').value || 0);
-    const bucket = Number($('ptpBucket').value || 0);
-    const maxDays = Number($('maxPtpExtension').value || 0);
-    const data = Object.assign({}, extra, {
-      source: 'frontend',
-      first_name: $('firstName').value.trim(),
-      phone_number: $('phoneNumber').value.trim(),
-      loan_id: /^\d+$/.test(loanIdRaw) ? Number(loanIdRaw) : loanIdRaw,
-      due_amount: due,
-      installment_amount: due,
-      Loan_date: $('loanDate').value,
-      dealer_name: $('dealerName').value.trim(),
-      PTP_bucket: String(bucket),
-      Max_ptp_extension: maxDays,
-      exetended_ptp_date: extra.exetended_ptp_date || '',
+  /* ── STATUS DOTS ── */
+  function setDot(id, cls, label) {
+    const dot = $(id), txt = $(id.replace('dot','txt'));
+    if (dot) { dot.className = 'stat-dot ' + (cls || ''); }
+    if (txt && label) txt.textContent = label;
+  }
+
+  /* ── PHASE BAR ── */
+  const PHASES = ['IDENTITY','ASK_PAYMENT','NEGOTIATION','REASON','CLOSED'];
+  function updatePhase(stage) {
+    const idx = PHASES.indexOf(stage);
+    PHASES.forEach((_, i) => {
+      const step = $('ps'+i), lbl = $('pl'+i);
+      if (!step) return;
+      if (i < idx)       { step.className = 'phase-step done';   if(lbl){lbl.className='phase-label done';} }
+      else if (i === idx){ step.className = 'phase-step active'; if(lbl){lbl.className='phase-label active';} }
+      else               { step.className = 'phase-step';         if(lbl){lbl.className='phase-label';} }
     });
-    if (!data.first_name) throw new Error('Customer name is required');
-    if (!data.loan_id && data.loan_id !== 0) throw new Error('Loan ID is required');
-    if (!data.due_amount || data.due_amount <= 0) throw new Error('Due amount must be greater than 0');
-    return data;
   }
 
-  function fillSampleLead() {
-    $('firstName').value = 'Rahul Patel';
-    $('phoneNumber').value = '9991110001';
-    $('loanId').value = '701';
-    $('dueAmount').value = '2500';
-    $('loanDate').value = '2026-05-11';
-    $('ptpBucket').value = '0';
-    $('maxPtpExtension').value = '3';
-    $('dealerName').value = 'Dealer One';
-    $('customerJson').value = JSON.stringify({
-      title: 'TECLOAN1001',
-      alt_name: 'Amit Shah',
-      alt_phone: '8881110001',
-      last_name: 'Ramesh Patel',
-      refrence_mobile: '9876543211',
-      postal_code: '360001',
-      user_id: 501,
-      list_id: 1616,
-      email: ''
-    }, null, 2);
+  /* ── OUTCOME BANNER ── */
+  function showOutcome(outcome) {
+    const banner = $('outcome-banner');
+    const map = {
+      PTP_CREATED:     ['ptp',    '📅 PTP Created — Extension granted'],
+      COMMITTED:       ['commit', '✅ Payment Committed — Customer will pay today'],
+      ESCALATED:       ['esc',    '📤 Escalated — Case sent to senior team'],
+      WRONG_PERSON:    ['end',    '❌ Wrong Person'],
+      CUSTOMER_ENDED:  ['end',    '📵 Customer ended call'],
+      CALL_ABANDONED:  ['end',    '📵 Call abandoned'],
+    };
+    const [cls, text] = map[outcome] || ['end', `Call ended: ${outcome}`];
+    banner.className = `outcome-banner show ${cls}`;
+    banner.textContent = text;
   }
 
-  async function validateLead() {
+  /* ── CALL TIMER ── */
+  function startTimer() {
+    callStartTs = Date.now();
+    callTimerInterval = setInterval(() => {
+      const s = Math.floor((Date.now() - callStartTs) / 1000);
+      const mm = String(Math.floor(s/60)).padStart(2,'0');
+      const ss = String(s % 60).padStart(2,'0');
+      $('callTimer').textContent = `${mm}:${ss}`;
+    }, 500);
+  }
+  function stopTimer() {
+    clearInterval(callTimerInterval);
+    callTimerInterval = null;
+  }
+
+  /* ── URL HELPERS ── */
+  function backendUrl() { return $('backendUrl').value.replace(/\/$/, ''); }
+  function wsUrl() { return backendUrl().replace(/^http/,'ws') + '/ws/call'; }
+  function bgUrl(f) { return backendUrl() + '/bg/' + encodeURIComponent(f); }
+  function dataMode() { return $('dataMode').value; }
+
+  /* ── BACKGROUND AUDIO ── */
+  async function startBackground() {
+    if (bgAudio) return;
+    bgAudio = new Audio(bgUrl('fan.mp3'));
+    bgAudio.loop = true; bgAudio.volume = 0.035; bgAudio.crossOrigin = 'anonymous';
+    try { await bgAudio.play(); log('Background fan started'); } catch(e) { log('Fan autoplay blocked: ' + e.message); }
+    honksPlayed = 0;
+    scheduleHonk();
+  }
+  function stopBackground() {
+    clearTimeout(honkTimer); honkTimer = null;
+    if (bgAudio) { try { bgAudio.pause(); } catch(e) {} bgAudio = null; }
+    honksPlayed = 0;
+    log('Background stopped');
+  }
+  function scheduleHonk() {
+    if (honkTimer) clearTimeout(honkTimer);
+    if (!callStarted || honksPlayed >= MAX_HONKS) return;
+    honkTimer = setTimeout(playHonk, (45 + Math.random()*45)*1000);
+  }
+  async function playHonk() {
+    if (!callStarted || honksPlayed >= MAX_HONKS) return;
+    const files = ['honk.mp3','honk2.mp3','honk3.mp3'];
+    const f = files[Math.floor(Math.random()*files.length)];
+    const h = new Audio(bgUrl(f));
+    h.volume = 0.06; h.crossOrigin = 'anonymous';
+    try { await h.play(); honksPlayed++; } catch(e) {}
+    scheduleHonk();
+  }
+
+  /* ── MIC ── */
+  async function enableMicAuto() {
+    if (micStream) { setMicMuted(false,'auto'); return; }
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      addMsg('system','Mic requires localhost or HTTPS.'); return;
+    }
     try {
-      const res = await fetch(backendUrl() + '/customer/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer_data: buildCustomerData() })
-      });
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.detail || out.message || 'validation failed');
-      log('Lead valid. PTP available: ' + out.ptp_available);
-      addMsg('system', 'Lead valid: ' + out.customer.first_name + ', loan ' + out.customer.loan_id + ', due Rs.' + out.customer.due_amount);
-    } catch (e) {
-      log('Lead validation error: ' + e.message);
-      addMsg('system', 'Lead validation error: ' + e.message);
-    }
-  }
-
-  function arrayBufferToBase64(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-    }
-    return btoa(binary);
-  }
-
-  function base64ToArrayBuffer(base64) {
-    const binary = atob(base64);
-    const len = binary.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes.buffer;
-  }
-
-  function downsampleFloat32(buffer, inputRate, outputRate) {
-    if (outputRate === inputRate) return buffer;
-    const ratio = inputRate / outputRate;
-    const newLength = Math.round(buffer.length / ratio);
-    const result = new Float32Array(newLength);
-    let offsetResult = 0;
-    let offsetBuffer = 0;
-    while (offsetResult < result.length) {
-      const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
-      let accum = 0, count = 0;
-      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
-        accum += buffer[i]; count++;
-      }
-      result[offsetResult] = count ? accum / count : 0;
-      offsetResult++;
-      offsetBuffer = nextOffsetBuffer;
-    }
-    return result;
-  }
-
-  function floatTo16BitPCM(float32) {
-    const out = new Int16Array(float32.length);
-    for (let i = 0; i < float32.length; i++) {
-      let s = Math.max(-1, Math.min(1, float32[i]));
-      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-    }
-    return out;
-  }
-
-  function rmsFloat(buffer) {
-    let sum = 0;
-    for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
-    return Math.sqrt(sum / Math.max(1, buffer.length));
-  }
-
-  async function connectWs() {
-    if (ws && ws.readyState === WebSocket.OPEN) return;
-    $('serverUrlPill').textContent = backendUrl();
-    ws = new WebSocket(wsUrl());
-    ws.onopen = () => {
-      setPill(wsStatus, 'WS: connected', 'on');
-      $('startBtn').disabled = false;
-      $('sendTextBtn').disabled = false;
-      log('WebSocket connected');
-    };
-    ws.onclose = () => {
-      setPill(wsStatus, 'WS: disconnected');
-      $('startBtn').disabled = true;
-      $('stopBtn').disabled = true;
-      $('sendTextBtn').disabled = true;
-      log('WebSocket closed');
-    };
-    ws.onerror = (e) => log('WebSocket error');
-    ws.onmessage = async (event) => {
-      const msg = JSON.parse(event.data);
-      handleServerMessage(msg);
-    };
-  }
-
-  async function handleServerMessage(msg) {
-    if (msg.type === 'ready') log('Server ready');
-    else if (msg.type === 'call_started') {
-      callStarted = true;
-      // Starting a new call must always unmute any existing mic stream.
-      // Previous call end / manual stop may have left muted=true, which caused
-      // "Mic detected audio | sent=false" even though RMS was visible.
-      setMicMuted(false, 'call_started');
-      $('stopBtn').disabled = false;
-      $('micBtn').disabled = !!micStream;
-      $('muteBtn').disabled = !micStream;
-      $('sendTextBtn').disabled = false;
-      log('Call started: ' + msg.call_id);
-      startContinuousBackground('call_started');
-    } else if (msg.type === 'bot_text') {
-      addMsg('bot', msg.text);
-    } else if (msg.type === 'bot_audio_wav') {
-      enqueueAudio(msg.audio);
-    } else if (msg.type === 'transcript') {
-      addMsg(msg.speaker === 'customer' ? 'customer' : 'system', msg.text);
-    } else if (msg.type === 'stop_playback') {
-      setPill(bargeStatus, 'Barge-in: detected', 'warn');
-      log('Barge-in detected; stopping playback');
-      stopPlayback();
-      setTimeout(() => setPill(bargeStatus, 'Barge-in: idle'), 1600);
-    } else if (msg.type === 'log') {
-      log(msg.message || 'server log');
-    } else if (msg.type === 'audio_debug') {
-      if (msg.debug && typeof msg.debug.rms === 'number') {
-        // log quietly every few seconds only in console
-        console.debug('audio_debug', msg.debug);
-      }
-    } else if (msg.type === 'agent_state') {
-      console.debug('agent_state', msg.state);
-    } else if (msg.type === 'agent_debug') {
-      const events = msg.events || [];
-      events.forEach((ev) => {
-        const copy = Object.assign({}, ev);
-        const name = copy.event || 'event';
-        delete copy.event;
-        delete copy.ts;
-        let details = '';
-        try { details = JSON.stringify(copy); } catch (e) { details = String(copy); }
-        if (details.length > 700) details = details.slice(0, 700) + '...';
-        log('AGENT ' + name + (details && details !== '{}' ? ' | ' + details : ''));
-      });
-    } else if (msg.type === 'call_ended') {
-      log('Call ended: ' + (msg.outcome || ''));
-      if (msg.customer) {
-        log('Final PTP bucket: ' + msg.customer.PTP_bucket + ' | extended date: ' + (msg.customer.exetended_ptp_date || ''));
-      }
-      callStarted = false;
-      $('stopBtn').disabled = true;
-      parkMicAfterCallEnd();
-      stopContinuousBackground('call_ended');
-      setPill(bargeStatus, 'Call closed', 'warn');
-      console.warn('[CALL] ended; mic stream is kept alive but audio will not be sent until a new call starts', msg);
-    } else if (msg.type === 'error') {
-      log('ERROR ' + (msg.where ? msg.where + ': ' : '') + msg.message);
-      addMsg('system', 'Error: ' + msg.message);
-    }
-  }
-
-  async function startCall() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) await connectWs();
-    try {
-      let payload = { type: 'start' };
-      if (dataMode() === 'frontend') {
-        payload.customer_data = buildCustomerData();
-        log('Starting call with frontend lead data: ' + payload.customer_data.first_name + ' / loan ' + payload.customer_data.loan_id);
-      } else {
-        payload.customer_ref = $('customerIndex').value || '0';
-        log('Starting call from data.json ref: ' + payload.customer_ref);
-      }
-      callStarted = false;
-      setMicMuted(false, 'start_call_clicked');
-      // Prepare AudioContext during user gesture so continuous background can play when the call starts.
-      if (audioCtx == null) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') await audioCtx.resume();
-      ws.send(JSON.stringify(payload));
-      $('startBtn').disabled = true;
-      console.log('[CALL] start payload sent', payload);
-    } catch (e) {
-      log('Cannot start call: ' + e.message);
-      addMsg('system', 'Cannot start call: ' + e.message);
-    }
-  }
-
-  async function enableMic() {
-    try {
-      console.log('[MIC] Enable Mic clicked. callStarted=', callStarted, 'muted=', muted, 'wsState=', ws ? ws.readyState : 'no-ws');
-
-      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        throw new Error('Browser mic requires localhost or HTTPS. Current page is not a secure context.');
-      }
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('navigator.mediaDevices.getUserMedia is not available in this browser/page.');
-      }
-
-      if (audioCtx == null) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-      setMicMuted(false, 'enable_mic_clicked');  // IMPORTANT: call_end previously sets muted=true
-
-      // Stop any stale stream before opening a fresh one.
-      if (micStream) {
-        try { micStream.getTracks().forEach(t => t.stop()); } catch (e) {}
-      }
-      if (processor) {
-        try { processor.disconnect(); } catch (e) {}
-      }
-      if (inputNode) {
-        try { inputNode.disconnect(); } catch (e) {}
-      }
-
+      setMicMuted(false,'auto_enable');
       micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1
-        }
+        audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1 }
       });
-
-      const tracks = micStream.getAudioTracks();
-      console.log('[MIC] permission granted. Tracks:', tracks.map(t => ({ label: t.label, enabled: t.enabled, muted: t.muted, readyState: t.readyState, settings: t.getSettings ? t.getSettings() : {} })));
-      log('Mic permission granted: ' + (tracks[0]?.label || 'default microphone'));
-
-      inputNode = audioCtx.createMediaStreamSource(micStream);
-      processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      inputNode  = audioCtx.createMediaStreamSource(micStream);
+      processor  = audioCtx.createScriptProcessor(4096, 1, 1);
       inputNode.connect(processor);
-      // Keep processor alive. Gain 0 prevents audible feedback/echo from this node.
       const silentGain = audioCtx.createGain();
       silentGain.gain.value = 0;
       processor.connect(silentGain);
       silentGain.connect(audioCtx.destination);
-
-      micChunkCount = 0;
-      micSpeechHitCount = 0;
-      micDebugLastLog = 0;
-
+      micChunkCount = 0; micDebugLast = 0;
       processor.onaudioprocess = (e) => {
         const input = e.inputBuffer.getChannelData(0);
         const level = rmsFloat(input);
-        micChunkCount++;
-        if (level > 0.008) micSpeechHitCount++;
-
-        levelBar.style.width = Math.min(100, Math.round(level * 1200)) + '%';
-
+        $('levelBar').style.width = Math.min(100, Math.round(level * 1200)) + '%';
         const now = performance.now();
-        if (now - micDebugLastLog > 1000) {
-          micDebugLastLog = now;
-          const wsOpen = !!ws && ws.readyState === WebSocket.OPEN;
-          let blockReason = null;
-          if (!wsOpen) blockReason = 'ws_not_open';
-          else if (!callStarted) blockReason = 'call_not_started_or_closed';
-          else if (muted) blockReason = 'mic_muted';
-          const state = {
-            rms: Number(level.toFixed(5)),
-            chunks: micChunkCount,
-            speechHits: micSpeechHitCount,
-            muted,
-            callStarted,
-            wsOpen,
-            blockReason,
-            audioCtxState: audioCtx.state
-          };
-          console.log('[MIC DEBUG]', state);
-          if (level > 0.008) {
-            const sentNow = callStarted && !muted && ws && ws.readyState === WebSocket.OPEN;
-            log('Mic detected audio rms=' + level.toFixed(4) + ' | sent=' + sentNow + (blockReason ? ' | reason=' + blockReason : ''));
-          }
+        if (now - micDebugLast > 2000 && level > 0.008) {
+          micDebugLast = now;
+          log('Mic rms=' + level.toFixed(4));
         }
-
-        // Detect mic even if call is closed, but do not send audio unless the call is active.
         if (!ws || ws.readyState !== WebSocket.OPEN || muted || !callStarted) return;
-
         const pcmFloat = downsampleFloat32(input, audioCtx.sampleRate, 16000);
         const pcm16 = floatTo16BitPCM(pcmFloat);
-        ws.send(JSON.stringify({
-          type: 'audio_chunk',
-          sample_rate: 16000,
-          audio: arrayBufferToBase64(pcm16.buffer)
-        }));
+        ws.send(JSON.stringify({ type:'audio_chunk', sample_rate:16000, audio: arrayBufferToBase64(pcm16.buffer) }));
       };
-
-      if (callStarted && !bgAudio) startContinuousBackground('enable_mic_clicked');
-      setPill(micStatus, 'Mic: on', 'on');
-      $('micBtn').disabled = true;
-      $('muteBtn').disabled = false;
-      log('Mic enabled. Speak now; watch Console for [MIC DEBUG].');
-    } catch (e) {
-      console.error('[MIC ERROR]', e);
-      log('Mic error: ' + (e.message || e.name || e));
-      addMsg('system', 'Mic error: ' + (e.message || e.name || e));
-      setPill(micStatus, 'Mic: error', 'warn');
+      setDot('dotMic','on','Mic on');
+      log('Mic enabled automatically');
+    } catch(e) {
+      setDot('dotMic','error','Mic error');
+      log('Mic error: ' + e.message);
+      addMsg('system','Mic error: ' + e.message);
     }
   }
-
-  function muteToggle() {
-    setMicMuted(!muted, 'mute_button');
-    log(muted ? 'Mic muted' : 'Mic unmuted');
+  function disableMicAuto() {
+    if (processor) { try { processor.disconnect(); } catch(e) {} processor = null; }
+    if (inputNode) { try { inputNode.disconnect(); } catch(e) {} inputNode = null; }
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    setMicMuted(true,'call_ended');
+    setDot('dotMic','','Mic off');
+    $('levelBar').style.width = '0';
+    log('Mic disabled');
+  }
+  function setMicMuted(val, reason='') {
+    muted = !!val;
+    if (micStream) setDot('dotMic', muted?'warn':'on', muted?'Mic muted':'Mic on');
   }
 
-  function enqueueAudio(base64wav) {
-    playbackQueue.push(base64wav);
+  /* ── PLAYBACK ── */
+  function enqueueAudio(b64) {
+    playbackQueue.push(b64);
     if (!playing) playNext();
   }
-
   async function playNext() {
     if (!playbackQueue.length) {
       playing = false;
-      setPill(playStatus, 'Playback: idle');
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'playback_ended' }));
-      if (callStarted && micStream && muted) {
-        setMicMuted(false, 'playback_idle_auto_unmute');
-      }
+      setDot('dotPlay','','Idle');
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'playback_ended'}));
+      if (callStarted && micStream && muted) setMicMuted(false,'playback_done');
       return;
     }
-    if (audioCtx == null) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    const base64wav = playbackQueue.shift();
-    const arrayBuffer = base64ToArrayBuffer(base64wav);
-    let audioBuffer;
-    try {
-      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
-    } catch (e) {
-      log('Could not decode bot audio: ' + e.message);
-      playNext();
-      return;
-    }
+    const b64 = playbackQueue.shift();
+    let buf;
+    try { buf = await audioCtx.decodeAudioData(base64ToArrayBuffer(b64).slice(0)); }
+    catch(e) { log('Audio decode error: '+e.message); playNext(); return; }
     currentSource = audioCtx.createBufferSource();
-    currentSource.buffer = audioBuffer;
+    currentSource.buffer = buf;
     currentSource.connect(audioCtx.destination);
-    currentSource.onended = () => {
-      currentSource = null;
-      playNext();
-    };
+    currentSource.onended = () => { currentSource = null; playNext(); };
     playing = true;
-    setPill(playStatus, 'Playback: speaking', 'on');
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'playback_started' }));
+    setDot('dotPlay','on','Speaking');
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'playback_started'}));
     currentSource.start();
   }
-
   function stopPlayback() {
     playbackQueue = [];
-    if (currentSource) {
-      try { currentSource.stop(); } catch (e) {}
-      currentSource.disconnect();
-      currentSource = null;
-    }
+    if (currentSource) { try { currentSource.stop(); } catch(e) {} currentSource.disconnect(); currentSource = null; }
     playing = false;
-    setPill(playStatus, 'Playback: interrupted', 'warn');
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'playback_ended' }));
+    setDot('dotPlay','warn','Interrupted');
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'playback_ended'}));
+  }
+
+  /* ── WEBSOCKET ── */
+  async function connectWs() {
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+    $('serverUrlPill').textContent = backendUrl();
+    ws = new WebSocket(wsUrl());
+    ws.onopen  = () => { setDot('dotWS','on','Connected'); $('startBtn').disabled = false; $('sendTextBtn').disabled = false; log('WS connected'); };
+    ws.onclose = () => { setDot('dotWS','','Disconnected'); $('startBtn').disabled = true; $('stopBtn').disabled = true; $('sendTextBtn').disabled = true; callStarted = false; stopTimer(); log('WS closed'); };
+    ws.onerror = () => { log('WS error'); };
+    ws.onmessage = async e => handleMsg(JSON.parse(e.data));
+  }
+
+  /* ── MESSAGE HANDLER ── */
+  async function handleMsg(msg) {
+    if (msg.type === 'ready') { log('Server ready'); }
+
+    else if (msg.type === 'call_started') {
+      callStarted = true;
+      $('stopBtn').disabled = false;
+      $('startBtn').disabled = true;
+      $('sendTextBtn').disabled = false;
+      $('outcome-banner').className = 'outcome-banner';
+      startTimer();
+      log('Call started: ' + msg.call_id);
+      startBackground();
+      await enableMicAuto();
+      setDot('dotProcessing','on','Listening');
+      $('txtProcessing').textContent = 'Listening';
+    }
+
+    else if (msg.type === 'stt_started') {
+      showThinking();
+      setDot('dotProcessing','active','Processing…');
+      $('txtProcessing').textContent = 'Processing…';
+    }
+
+    else if (msg.type === 'latency') {
+      if (msg.phase === 'stt')        updateLatBadge('latSTT', msg.ms);
+      else if (msg.phase === 'llm')   updateLatBadge('latLLM', msg.ms);
+      else if (msg.phase === 'total_turn') updateLatBadge('latTotal', msg.ms);
+    }
+
+    else if (msg.type === 'bot_text') {
+      removeFillerMsg();
+      removeThinking();
+      const ttsMs = '';  // will arrive shortly with bot_audio_wav
+      addMsg('bot', msg.text);
+    }
+
+    else if (msg.type === 'bot_audio_wav') {
+      if (msg.tts_ms) updateLatBadge('latTTS', msg.tts_ms);
+      enqueueAudio(msg.audio);
+      setDot('dotProcessing','on','Listening');
+      $('txtProcessing').textContent = 'Listening';
+    }
+
+    else if (msg.type === 'filler_text') {
+      addFillerMsg(msg.text);
+    }
+
+    else if (msg.type === 'filler_audio_wav') {
+      enqueueAudio(msg.audio);
+    }
+
+    else if (msg.type === 'transcript') {
+      removeThinking();
+      if (msg.speaker === 'customer') {
+        addMsg('customer', msg.text);
+      } else {
+        addMsg('system', msg.text);
+      }
+    }
+
+    else if (msg.type === 'stop_playback') {
+      setDot('dotBarge','warn','Barge-in!');
+      stopPlayback();
+      removeFillerMsg();
+      setTimeout(() => setDot('dotBarge','','Barge: idle'), 1800);
+    }
+
+    else if (msg.type === 'agent_state') {
+      const s = msg.state || {};
+      if (s.stage) updatePhase(s.stage);
+    }
+
+    else if (msg.type === 'agent_debug') {
+      (msg.events || []).forEach(ev => {
+        const name = ev.event || 'event';
+        let d = '';
+        try { d = JSON.stringify(Object.fromEntries(Object.entries(ev).filter(([k])=>k!=='event'&&k!=='ts'))); } catch(e){}
+        if (d.length > 400) d = d.slice(0,400)+'…';
+        log('AGENT ' + name + (d && d !== '{}' ? ' | '+d : ''));
+      });
+    }
+
+    else if (msg.type === 'call_ended') {
+      log('Call ended: ' + (msg.outcome || ''));
+      callStarted = false;
+      stopTimer();
+      stopBackground();
+      disableMicAuto();
+      $('stopBtn').disabled = true;
+      $('startBtn').disabled = false;
+      removeThinking();
+      removeFillerMsg();
+      if (msg.outcome) showOutcome(msg.outcome);
+      setDot('dotProcessing','','Idle'); $('txtProcessing').textContent = 'Idle';
+      if (msg.customer) {
+        log('PTP bucket: ' + msg.customer.PTP_bucket + ' | date: ' + (msg.customer.exetended_ptp_date || 'n/a'));
+      }
+    }
+
+    else if (msg.type === 'log')   { log(msg.message || ''); }
+    else if (msg.type === 'error') { log('ERR ' + (msg.where?msg.where+': ':'') + msg.message); addMsg('system','Error: '+msg.message); }
+    else if (['audio_debug','stt_started'].includes(msg.type)) {}
+  }
+
+  /* ── START / STOP CALL ── */
+  async function startCall() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) await connectWs();
+    try {
+      // Need user gesture for AudioContext
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      let payload = { type: 'start' };
+      if (dataMode() === 'frontend') {
+        payload.customer_data = buildCustomerData();
+        log('Starting call: ' + payload.customer_data.first_name + ' / loan ' + payload.customer_data.loan_id);
+      } else {
+        payload.customer_ref = $('customerIndex').value || '0';
+      }
+      callStarted = false;
+      ws.send(JSON.stringify(payload));
+      $('startBtn').disabled = true;
+    } catch(e) { log('Cannot start: ' + e.message); addMsg('system','Cannot start: '+e.message); }
+  }
+
+  async function stopCall() {
+    stopPlayback();
+    stopBackground();
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'stop'}));
+    callStarted = false;
+    stopTimer();
+    disableMicAuto();
+    $('stopBtn').disabled = true;
+    $('startBtn').disabled = false;
+    removeThinking();
+    removeFillerMsg();
+    setDot('dotProcessing','','Idle'); $('txtProcessing').textContent = 'Idle';
   }
 
   function sendTypedText() {
     const text = $('typedText').value.trim();
     if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type:'text', text }));
+    ws.send(JSON.stringify({type:'text', text}));
     $('typedText').value = '';
   }
 
-  function parkMicAfterCallEnd() {
-    // Do NOT close the microphone automatically when the agent ends a call.
-    // The old desktop workflow immediately returned to listening after speech; for web mode
-    // we keep the browser MediaStream alive so the next call can start without asking mic
-    // permission again. Audio is still blocked from being sent because callStarted=false.
-    if (micStream) {
-      setMicMuted(false, 'call_ended_keep_alive');
-      setPill(micStatus, 'Mic: ready');
-      $('micBtn').disabled = true;
-      $('muteBtn').disabled = false;
-      log('Mic kept alive after call end; it will send again only after Start Call.');
-    } else {
-      setPill(micStatus, 'Mic: off');
-      $('micBtn').disabled = false;
-      $('muteBtn').disabled = true;
+  /* ── LEAD FORM HELPERS ── */
+  function parseExtraJson() {
+    const raw = $('customerJson').value.trim();
+    if (!raw) return {};
+    try { return JSON.parse(raw); } catch(e) { throw new Error('Extra JSON invalid: ' + e.message); }
+  }
+  function buildCustomerData() {
+    const extra = parseExtraJson();
+    const loanIdRaw = $('loanId').value.trim();
+    const due = Number($('dueAmount').value || 0);
+    const data = Object.assign({}, extra, {
+      source: 'frontend',
+      first_name: $('firstName').value.trim(),
+      phone_number: $('phoneNumber').value.trim(),
+      loan_id: /^\d+$/.test(loanIdRaw) ? Number(loanIdRaw) : loanIdRaw,
+      due_amount: due, installment_amount: due,
+      Loan_date: $('loanDate').value,
+      dealer_name: $('dealerName').value.trim(),
+      PTP_bucket: String(Number($('ptpBucket').value||0)),
+      Max_ptp_extension: Number($('maxPtpExtension').value||0),
+      exetended_ptp_date: extra.exetended_ptp_date || '',
+    });
+    if (!data.first_name) throw new Error('Customer name required');
+    if (!data.loan_id && data.loan_id !== 0) throw new Error('Loan ID required');
+    if (!data.due_amount || data.due_amount <= 0) throw new Error('Due amount must be > 0');
+    return data;
+  }
+  function fillSampleLead() {
+    $('firstName').value='Rahul Patel'; $('phoneNumber').value='9991110001';
+    $('loanId').value='701'; $('dueAmount').value='2500';
+    $('loanDate').value='2026-05-11'; $('ptpBucket').value='0';
+    $('maxPtpExtension').value='3'; $('dealerName').value='Dealer One';
+    $('customerJson').value=JSON.stringify({title:'TECLOAN1001',alt_name:'Amit Shah',alt_phone:'8881110001',last_name:'Ramesh Patel',refrence_mobile:'9876543211',postal_code:'360001',user_id:501,list_id:1616,email:''},null,2);
+  }
+  async function validateLead() {
+    try {
+      const res = await fetch(backendUrl()+'/customer/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_data:buildCustomerData()})});
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.detail || out.message || 'validation failed');
+      log('Valid. PTP available: ' + out.ptp_available);
+      addMsg('system','Lead valid: ' + out.customer.first_name + ', loan '+ out.customer.loan_id +', due ₹'+ out.customer.due_amount);
+    } catch(e) { log('Validate error: '+e.message); addMsg('system','Validate error: '+e.message); }
+  }
+
+  /* ── AUDIO UTILS ── */
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
+    return btoa(binary);
+  }
+  function base64ToArrayBuffer(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  function downsampleFloat32(buf, inRate, outRate) {
+    if (inRate === outRate) return buf;
+    const ratio = inRate / outRate;
+    const out = new Float32Array(Math.round(buf.length / ratio));
+    let oi = 0, bi = 0;
+    while (oi < out.length) {
+      const next = Math.round((oi+1)*ratio);
+      let acc = 0, n = 0;
+      for (let i = bi; i < next && i < buf.length; i++) { acc += buf[i]; n++; }
+      out[oi++] = n ? acc/n : 0;
+      bi = next;
     }
-    $('sendTextBtn').disabled = false;
-    $('startBtn').disabled = false;
+    return out;
+  }
+  function floatTo16BitPCM(f32) {
+    const out = new Int16Array(f32.length);
+    for (let i = 0; i < f32.length; i++) {
+      const s = Math.max(-1, Math.min(1, f32[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return out;
+  }
+  function rmsFloat(buf) {
+    let s = 0;
+    for (let i = 0; i < buf.length; i++) s += buf[i]*buf[i];
+    return Math.sqrt(s / Math.max(1, buf.length));
   }
 
-  async function stopCall() {
-    stopPlayback();
-    stopContinuousBackground('manual_stop');
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'stop' }));
-    callStarted = false;
-    if (processor) { try { processor.disconnect(); } catch(e) {} }
-    if (inputNode) { try { inputNode.disconnect(); } catch(e) {} }
-    if (micStream) micStream.getTracks().forEach(t => t.stop());
-    micStream = null; inputNode = null; processor = null;
-    setMicMuted(true, 'manual_stop');
-    setPill(micStatus, 'Mic: off');
-    $('micBtn').disabled = false;
-    $('muteBtn').disabled = true;
-    console.log('[MIC] stopped manually');
-  }
-
+  /* ── WIRE UP EVENTS ── */
   $('connectBtn').onclick = connectWs;
-  $('startBtn').onclick = startCall;
-  $('micBtn').onclick = enableMic;
-  $('muteBtn').onclick = muteToggle;
+  $('startBtn').onclick   = startCall;
+  $('stopBtn').onclick    = stopCall;
   $('sendTextBtn').onclick = sendTypedText;
-  $('stopBtn').onclick = stopCall;
   $('sampleLeadBtn').onclick = fillSampleLead;
   $('validateLeadBtn').onclick = validateLead;
+  $('typedText').addEventListener('keydown', e => { if (e.key === 'Enter') sendTypedText(); });
   $('dataMode').onchange = () => {
     const useJson = dataMode() === 'json';
     $('jsonRefBox').style.display = useJson ? 'block' : 'none';
-    $('leadForm').style.display = useJson ? 'none' : 'block';
+    $('leadForm').style.display   = useJson ? 'none' : 'block';
   };
-  $('typedText').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendTypedText(); });
-
   $('serverUrlPill').textContent = backendUrl();
-  log('Open backend /health first, then Connect. For mic, use localhost or HTTPS.');
+
+  // Initial state
+  updatePhase('IDENTITY');
+  log('Ready. Click Connect, then Start Call.');
 })();
 </script>
 </body>

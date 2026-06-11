@@ -15,7 +15,7 @@ def get_model_name():
         from config import GEMINI_MODEL
         return GEMINI_MODEL
     except Exception:
-        return os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+        return os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()

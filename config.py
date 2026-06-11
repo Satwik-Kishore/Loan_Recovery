@@ -70,6 +70,4 @@ SARVAM_TTS_TIMEOUT = 30
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOG_DIR  = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "calls.jsonl"   # one JSON object per line, append-only
-
-
-LOGS_DIR       = BASE_DIR / "logs"
+LOGS_DIR = BASE_DIR / "logs"
