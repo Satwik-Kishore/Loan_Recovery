@@ -328,7 +328,7 @@
       <div class="section-label">Connection</div>
       <div>
         <label>Backend URL</label>
-        <input id="backendUrl" value="http://localhost:8000" />
+        <input id="backendUrl" value="http://94.136.187.37:8888" />
       </div>
       <label>Data source</label>
       <select id="dataMode">
@@ -630,9 +630,14 @@
   /* ── MIC ── */
   async function enableMicAuto() {
     if (micStream) { setMicMuted(false,'auto'); return; }
-    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      addMsg('system','Mic requires localhost or HTTPS.'); return;
-    }
+    if (
+  !window.isSecureContext &&
+  location.hostname !== 'localhost' &&
+  location.hostname !== '127.0.0.1' &&
+  location.hostname !== '94.136.187.37'
+) {
+  throw new Error('Browser mic requires localhost or HTTPS. Current page is not a secure context.');
+}
     try {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') await audioCtx.resume();
